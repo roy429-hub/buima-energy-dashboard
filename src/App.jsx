@@ -185,9 +185,15 @@ function ROICalculatorView({ setToast }) {
         laborCost: d.laborCost,
         chargesPerDay: d.dailySessions,
       }));
-      setDataSource(`${d.country} rates · Solar: ${d.solarSource}`);
+      setDataSource({
+        grid: d.gridSource,
+        ev: d.evSource,
+        solar: d.solarSource,
+        isGridVerified: d.isGridVerified,
+        geoName: d.geoName,
+      });
       setDataFetched(true);
-      setToast(`Data loaded for ${d.geoName || d.country}`);
+      setToast(`Data loaded for ${d.geoName}`);
     } catch (e) {
       setToast('Could not fetch data — using defaults');
       setDataFetched(true);
@@ -238,8 +244,19 @@ function ROICalculatorView({ setToast }) {
           </button>
         </div>
         {dataSource && (
-          <div className="mt-3">
-            <DataBadge source={dataSource} />
+          <div className="mt-4 space-y-2">
+            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.isGridVerified ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+              <span className="font-bold flex-shrink-0">{dataSource.isGridVerified ? '✅' : '⚠️'} Grid Price:</span>
+              <span>{dataSource.grid}</span>
+            </div>
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg text-xs border bg-amber-50 border-amber-100 text-amber-800">
+              <span className="font-bold flex-shrink-0">⚠️ EV Fee / Labor:</span>
+              <span>{dataSource.ev}</span>
+            </div>
+            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.solar && dataSource.solar.includes('✅') ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+              <span className="font-bold flex-shrink-0">{dataSource.solar && dataSource.solar.includes('✅') ? '✅' : '⚠️'} Solar Hours:</span>
+              <span>{dataSource.solar}</span>
+            </div>
           </div>
         )}
       </Card>
@@ -278,10 +295,10 @@ function ROICalculatorView({ setToast }) {
         </Card>
         <Card className="p-5 border-t-4 border-t-indigo-500">
           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Sun className="w-5 h-5 text-indigo-600" /> PV & Installation</h3>
-          {dataFetched && (
+          {dataFetched && dataSource && (
             <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-700 flex items-center gap-2">
               <Sun className="w-4 h-4 flex-shrink-0" />
-              Solar hours auto-filled from {dataSource}
+              Solar hours: {dataSource.solar}
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">

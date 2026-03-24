@@ -45,7 +45,7 @@ const Card = ({ children, className = '' }) => (
 const SectionHeader = ({ title, subtitle, icon: Icon }) => (
   <div className="mb-6">
     <div className="flex items-center gap-2 mb-1">
-      {Icon && <Icon className="w-6 h-6 text-emerald-600" />}
+      {Icon && <Icon className="w-6 h-6 text-rose-700" />}
       <h2 className="text-xl font-bold text-slate-800">{title}</h2>
     </div>
     {subtitle && <p className="text-slate-500 text-sm ml-8">{subtitle}</p>}
@@ -60,7 +60,7 @@ const InputField = ({ label, value, onChange, type = 'text', placeholder, suffix
       <div className="relative rounded-md shadow-sm">
         <input
           type={type} value={displayValue} onChange={onChange} min={min} max={max}
-          className="block w-full rounded-md border-slate-300 pl-3 pr-12 py-2 focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm border"
+          className="block w-full rounded-md border-slate-300 pl-3 pr-12 py-2 focus:border-rose-700 focus:ring-rose-700 sm:text-sm border"
           placeholder={placeholder}
         />
         {suffix && (
@@ -83,16 +83,16 @@ const Toast = ({ message, onClose }) => {
   if (!message) return null;
   return (
     <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-[110] animate-fade-in">
-      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+      <CheckCircle2 className="w-5 h-5 text-rose-500 flex-shrink-0" />
       <span className="font-medium text-sm">{message}</span>
     </div>
   );
 };
 
 const DataBadge = ({ source }) => (
-  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-md">
-    <Globe className="w-3 h-3 text-emerald-600" />
-    <span className="text-xs text-emerald-700 font-medium">Data: {source}</span>
+  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-rose-50 border border-rose-100 rounded-md">
+    <Globe className="w-3 h-3 text-rose-700" />
+    <span className="text-xs text-rose-800 font-medium">Data: {source}</span>
   </div>
 );
 
@@ -106,15 +106,16 @@ export default function App() {
       <Toast message={toastMsg} onClose={() => setToastMsg(null)} />
 
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
+      <header className="bg-white border-b-2 border-rose-700 sticky top-0 z-50 print:hidden shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">B</div>
-            <span className="text-lg font-bold tracking-tight text-slate-800">
-              BUIMA<span className="text-emerald-600">ENERGY</span>
-            </span>
-            <span className="hidden sm:inline ml-2 px-2 py-0.5 rounded-full bg-emerald-50 text-xs font-medium text-emerald-700 border border-emerald-100 flex items-center gap-1">
-              <Globe className="w-3 h-3 inline mr-0.5" />No API Key Required
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="B.E.S.T Logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-base font-black tracking-tight text-slate-900">BUIMA <span className="text-rose-700">ENERGY</span></span>
+              <span className="text-[10px] font-bold text-rose-600 tracking-[0.15em] uppercase">B.E.S.T Dashboard</span>
+            </div>
+            <span className="hidden sm:inline ml-2 px-2 py-0.5 rounded-full bg-rose-50 text-[10px] font-semibold text-rose-700 border border-rose-200 items-center gap-1 flex">
+              <Globe className="w-3 h-3 mr-0.5" />No API Key Required
             </span>
           </div>
           <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg">
@@ -123,7 +124,7 @@ export default function App() {
               { id: 'modeler', label: 'Compare ROI' },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-700 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-rose-700'}`}>
                 {tab.label}
               </button>
             ))}
@@ -219,9 +220,9 @@ function ROICalculatorView({ setToast }) {
     <div className="space-y-6 animate-fade-in print:hidden">
       <SectionHeader title="Step 1: Location & Revenue Data" subtitle="Where will the B.E.S.T. system be installed?" icon={Building2} />
 
-      <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-3">
-        <Globe className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-        <div className="text-sm text-emerald-800">
+      <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
+        <Globe className="w-5 h-5 text-rose-700 mt-0.5 flex-shrink-0" />
+        <div className="text-sm text-rose-900">
           <span className="font-semibold">No API key needed.</span> Grid prices & EV charging rates are pulled from regional data tables. Solar hours come from <strong>Open-Meteo</strong> (free, real data).
         </div>
       </div>
@@ -234,18 +235,18 @@ function ROICalculatorView({ setToast }) {
               onChange={e => hi('location', e.target.value)}
               onKeyDown={e => e.key === 'Enter' && fetchLocation()}
               placeholder="e.g. Taipei, Tokyo, Dubai, San Francisco…"
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-700 focus:border-rose-700 outline-none"
             />
           </div>
           <button onClick={fetchLocation} disabled={loading || !formData.location}
-            className={`px-5 py-2.5 rounded-lg font-medium text-white transition-colors flex items-center gap-2 ${dataFetched ? 'bg-green-600' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:bg-slate-300`}>
+            className={`px-5 py-2.5 rounded-lg font-medium text-white transition-colors flex items-center gap-2 ${dataFetched ? 'bg-green-600' : 'bg-rose-700 hover:bg-rose-800'} disabled:bg-slate-300`}>
             {loading ? <Loader2 className="animate-spin w-4 h-4" /> : dataFetched ? <CheckCircle2 className="w-4 h-4" /> : <Search className="w-4 h-4" />}
             {loading ? 'Fetching…' : dataFetched ? 'Fetched!' : 'Auto-Fill'}
           </button>
         </div>
         {dataSource && (
           <div className="mt-4 space-y-2">
-            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.isGridVerified ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.isGridVerified ? 'bg-rose-50 border-rose-100 text-rose-900' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
               <span className="font-bold flex-shrink-0">{dataSource.isGridVerified ? '✅' : '⚠️'} Grid Price:</span>
               <span>{dataSource.grid}</span>
             </div>
@@ -253,7 +254,7 @@ function ROICalculatorView({ setToast }) {
               <span className="font-bold flex-shrink-0">⚠️ EV Fee / Labor:</span>
               <span>{dataSource.ev}</span>
             </div>
-            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.solar && dataSource.solar.includes('✅') ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+            <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs border ${dataSource.solar && dataSource.solar.includes('✅') ? 'bg-rose-50 border-rose-100 text-rose-900' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
               <span className="font-bold flex-shrink-0">{dataSource.solar && dataSource.solar.includes('✅') ? '✅' : '⚠️'} Solar Hours:</span>
               <span>{dataSource.solar}</span>
             </div>
@@ -271,7 +272,7 @@ function ROICalculatorView({ setToast }) {
       </div>
 
       <div className="flex justify-end">
-        <button onClick={() => setStep(2)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">
+        <button onClick={() => setStep(2)} className="bg-rose-700 hover:bg-rose-800 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">
           Next: Hardware Config <ArrowRight className="w-5 h-5" />
         </button>
       </div>
@@ -283,8 +284,8 @@ function ROICalculatorView({ setToast }) {
     <div className="space-y-6 animate-fade-in print:hidden">
       <SectionHeader title="Step 2: System Configuration" subtitle="Configure the B.E.S.T. hardware and installation costs." icon={Settings} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <Card className="p-5 border-t-4 border-t-emerald-500">
-          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Battery className="w-5 h-5 text-emerald-600" /> B.E.S.T. & PCS</h3>
+        <Card className="p-5 border-t-4 border-t-rose-600">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Battery className="w-5 h-5 text-rose-700" /> B.E.S.T. & PCS</h3>
           <InputField label="B.E.S.T. Quantity (Sets)" value={formData.bestQty} onChange={e => hi('bestQty', parseFloat(e.target.value))} type="number" note="1 Set = 4 Tiles (approx 16kWh)" />
           <InputField label="B.E.S.T. Lifecycle" value={formData.lifecycle} onChange={e => hi('lifecycle', parseFloat(e.target.value))} type="number" suffix="Cycles" note="Default: 8000 cycles @ 1C" />
           <InputField label="Cost per Set" value={formData.bestCost} onChange={e => hi('bestCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />
@@ -293,10 +294,10 @@ function ROICalculatorView({ setToast }) {
             <InputField label="PCS Cost" value={formData.pcsCost} onChange={e => hi('pcsCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />
           </div>
         </Card>
-        <Card className="p-5 border-t-4 border-t-indigo-500">
-          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Sun className="w-5 h-5 text-indigo-600" /> PV & Installation</h3>
+        <Card className="p-5 border-t-4 border-t-rose-300">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Sun className="w-5 h-5 text-rose-600" /> PV & Installation</h3>
           {dataFetched && dataSource && (
-            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-700 flex items-center gap-2">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-100 rounded-lg text-xs text-rose-700 flex items-center gap-2">
               <Sun className="w-4 h-4 flex-shrink-0" />
               Solar hours: {dataSource.solar}
             </div>
@@ -315,7 +316,7 @@ function ROICalculatorView({ setToast }) {
           </div>
           <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
             <span className="text-sm font-medium text-slate-700">Mounting Stand Required?</span>
-            <input type="checkbox" checked={formData.standRequired} onChange={e => hi('standRequired', e.target.checked)} className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500" />
+            <input type="checkbox" checked={formData.standRequired} onChange={e => hi('standRequired', e.target.checked)} className="w-5 h-5 text-rose-700 rounded focus:ring-rose-700" />
           </div>
           {formData.standRequired && <InputField label="Stand Cost" value={formData.standCost} onChange={e => hi('standCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />}
           <InputField label="Installation Labor" value={formData.laborCost} onChange={e => hi('laborCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} note={`Estimate for ${formData.location || 'your region'}`} />
@@ -323,7 +324,7 @@ function ROICalculatorView({ setToast }) {
       </div>
       <div className="flex justify-between">
         <button onClick={() => setStep(1)} className="text-slate-500 font-medium px-6 py-3 hover:text-slate-800">← Back</button>
-        <button onClick={() => setStep(3)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">Next: Partnership Structure <ArrowRight className="w-5 h-5" /></button>
+        <button onClick={() => setStep(3)} className="bg-rose-700 hover:bg-rose-800 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">Next: Partnership Structure <ArrowRight className="w-5 h-5" /></button>
       </div>
     </div>
   );
@@ -342,7 +343,7 @@ function ROICalculatorView({ setToast }) {
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800">Enable Joint Venture / Partnership Mode</h3>
             <button onClick={() => hi('jvEnabled', !formData.jvEnabled)}
-              className={`w-12 h-6 rounded-full transition-colors relative ${formData.jvEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              className={`w-12 h-6 rounded-full transition-colors relative ${formData.jvEnabled ? 'bg-rose-700' : 'bg-slate-300'}`}>
               <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${formData.jvEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
             </button>
           </div>
@@ -352,7 +353,7 @@ function ROICalculatorView({ setToast }) {
               {formData.parties.map(party => (
                 <div key={party.id} className={`p-4 rounded-xl border ${party.active ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
                   <div className="flex items-center gap-2 mb-3">
-                    <input type="checkbox" checked={party.active} onChange={() => toggleParty(party.id)} className="w-4 h-4 text-emerald-600 rounded" />
+                    <input type="checkbox" checked={party.active} onChange={() => toggleParty(party.id)} className="w-4 h-4 text-rose-700 rounded" />
                     <span className="font-bold text-sm text-slate-700">Party {party.id}</span>
                   </div>
                   {party.active && (
@@ -377,7 +378,7 @@ function ROICalculatorView({ setToast }) {
         <div className="flex justify-between">
           <button onClick={() => setStep(2)} className="text-slate-500 font-medium px-6 py-3 hover:text-slate-800">← Back</button>
           <button onClick={() => setStep(4)} disabled={formData.jvEnabled && !isValid}
-            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">
+            className="bg-rose-700 hover:bg-rose-800 disabled:bg-slate-300 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2">
             Generate Report <Calculator className="w-5 h-5" />
           </button>
         </div>
@@ -439,9 +440,9 @@ function ROICalculatorView({ setToast }) {
     return (
       <div id="printable-report" className="space-y-8 animate-fade-in">
         {/* Print header */}
-        <div className="hidden print:block border-b-2 border-emerald-600 pb-4 mb-6">
+        <div className="hidden print:block border-b-2 border-rose-700 pb-4 mb-6">
           <div className="flex justify-between items-center">
-            <div><h1 className="text-2xl font-bold">BUIMA<span className="text-emerald-600">ENERGY</span></h1><p className="text-sm text-slate-500">B.E.S.T Investment Analysis Report</p></div>
+            <div className="flex items-center gap-3"><img src="/logo.png" alt="logo" className="w-10 h-10 object-contain" /><div><h1 className="text-2xl font-black">BUIMA <span className="text-rose-700">ENERGY</span></h1><p className="text-sm text-slate-500 font-semibold tracking-wide">B.E.S.T Investment Analysis Report</p></div></div>
             <div className="text-right text-xs text-slate-400"><p>{new Date().toLocaleDateString()}</p><p>{formData.location}</p></div>
           </div>
         </div>
@@ -449,33 +450,81 @@ function ROICalculatorView({ setToast }) {
         <div className="print:hidden"><SectionHeader title="Investment Analysis Report" subtitle="Projected returns based on configured parameters." icon={TrendingUp} /></div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+
+          {/* CAPEX */}
           <Card className="p-4 bg-slate-800 text-white">
-            <p className="text-slate-400 text-xs mb-1">Total CAPEX</p>
-            <p className="text-2xl font-bold">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <p className="text-slate-400 text-xs mb-1 uppercase tracking-wide">Total CAPEX</p>
+            <p className="text-2xl font-bold mb-3">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <div className="border-t border-slate-700 pt-3 space-y-1 text-xs font-mono">
+              <p className="text-slate-400 font-sans font-semibold mb-2 not-italic">Breakdown:</p>
+              <p className="flex justify-between text-slate-300"><span>B.E.S.T × {formData.bestQty}</span><span>{(formData.bestQty * formData.bestCost).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-300"><span>PCS</span><span>{formData.pcsCost.toLocaleString()}</span></p>
+              {formData.evChargerCost > 0 && <p className="flex justify-between text-slate-300"><span>EV Charger</span><span>{formData.evChargerCost.toLocaleString()}</span></p>}
+              {formData.pvCost > 0    && <p className="flex justify-between text-slate-300"><span>PV System</span><span>{formData.pvCost.toLocaleString()}</span></p>}
+              {formData.standRequired && <p className="flex justify-between text-slate-300"><span>Stand</span><span>{formData.standCost.toLocaleString()}</span></p>}
+              <p className="flex justify-between text-slate-300"><span>Labor</span><span>{formData.laborCost.toLocaleString()}</span></p>
+              <p className="flex justify-between text-white font-bold border-t border-slate-600 pt-1 mt-1"><span>= Total</span><span>{totalCapex.toLocaleString(undefined,{maximumFractionDigits:0})}</span></p>
+            </div>
           </Card>
+
+          {/* Annual Net Profit */}
           <Card className="p-4">
-            <p className="text-slate-500 text-xs mb-1">Annual Net Profit</p>
-            <p className="text-2xl font-bold text-emerald-600">{currency} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Annual Net Profit</p>
+            <p className="text-2xl font-bold text-rose-700 mb-3">{currency} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+              <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
+              <p className="flex justify-between text-slate-600"><span>Sessions/day</span><span>{formData.chargesPerDay}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× hrs/session</span><span>{formData.avgChargeHours}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× power (kW)</span><span>{effectivePower.toFixed(1)}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× fee/kWh</span><span>{formData.chargingFee}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× 365 days</span><span>= {currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
+              <p className="flex justify-between text-red-500"><span>− Annual OpEx</span><span>{Math.round(annualOpEx).toLocaleString()}</span></p>
+              <p className="flex justify-between text-rose-800 font-bold border-t border-slate-100 pt-1 mt-1"><span>= Net/yr</span><span>{Math.round(annualProfit).toLocaleString()}</span></p>
+            </div>
           </Card>
+
+          {/* IRR */}
           <Card className="p-4">
-            <p className="text-slate-500 text-xs mb-1">Project IRR (10y)</p>
-            <p className={`text-2xl font-bold ${irrValue > 0 ? 'text-indigo-600' : 'text-red-500'}`}>{irrValue ? `${irrValue.toFixed(1)}%` : 'N/A'}</p>
+            <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Project IRR (10y)</p>
+            <p className={`text-2xl font-bold mb-3 ${irrValue > 0 ? 'text-indigo-600' : 'text-red-500'}`}>{irrValue ? `${irrValue.toFixed(1)}%` : 'N/A'}</p>
+            <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+              <p className="text-slate-500 font-sans font-semibold mb-2">Cash flow inputs:</p>
+              <p className="flex justify-between text-slate-600"><span>Year 0 (invest)</span><span className="text-red-500">−{Math.round(totalCapex).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>Yr 1–10 (annual)</span><span className="text-rose-700">+{Math.round(annualProfit).toLocaleString()}</span></p>
+              {replacementInterval <= 10 && (
+                <p className="flex justify-between text-slate-600"><span>Yr {replacementInterval} repl.</span><span className="text-amber-600">−{Math.round(replacementCost).toLocaleString()}</span></p>
+              )}
+              <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1 mt-1"><span>Battery life</span><span>{formData.lifecycle.toLocaleString()} cyc</span></p>
+              <p className="flex justify-between text-indigo-700 font-bold"><span>= IRR</span><span>{irrValue ? `${irrValue.toFixed(2)}%` : 'N/A'}</span></p>
+            </div>
           </Card>
+
+          {/* Payback */}
           <Card className="p-4">
-            <p className="text-slate-500 text-xs mb-1">ROI / Payback</p>
-            <p className="text-2xl font-bold text-slate-700">{roiYears > 0 ? roiYears.toFixed(1) : 'N/A'} <span className="text-sm font-normal text-slate-500">yrs</span></p>
-            <p className="text-xs text-slate-400">10y Yield: {roiPercent.toFixed(1)}%</p>
+            <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">ROI / Payback</p>
+            <p className="text-2xl font-bold text-slate-700 mb-1">{roiYears > 0 ? roiYears.toFixed(1) : 'N/A'} <span className="text-sm font-normal text-slate-500">yrs</span></p>
+            <p className="text-sm font-bold text-slate-500 mb-3">10y Yield: <span className={roiPercent >= 0 ? 'text-rose-700' : 'text-red-500'}>{roiPercent.toFixed(1)}%</span></p>
+            <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+              <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
+              <p className="flex justify-between text-slate-600"><span>CAPEX</span><span>{Math.round(totalCapex).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>÷ Net/yr</span><span>{Math.round(annualProfit).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-700 font-bold border-t border-slate-100 pt-1 mt-1"><span>= Payback</span><span>{roiYears > 0 ? `${roiYears.toFixed(1)} yrs` : 'N/A'}</span></p>
+              <p className="flex justify-between text-slate-600 mt-1"><span>10y Cumul.</span><span>{Math.round(cumulative).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>÷ CAPEX</span><span>{Math.round(totalCapex).toLocaleString()}</span></p>
+              <p className="flex justify-between text-rose-800 font-bold border-t border-slate-100 pt-1"><span>= 10y Yield</span><span>{roiPercent.toFixed(1)}%</span></p>
+            </div>
           </Card>
+
         </div>
 
         {/* JV Table */}
         {formData.jvEnabled && (
           <div>
-            <div className="mb-4 flex items-center gap-2 text-indigo-800"><Users className="w-5 h-5" /><h3 className="text-lg font-bold">Partnership Analysis</h3></div>
+            <div className="mb-4 flex items-center gap-2 text-rose-800"><Users className="w-5 h-5 text-rose-700" /><h3 className="text-lg font-bold">Partnership Analysis</h3></div>
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full text-sm text-left">
-                <thead className="bg-indigo-50 text-indigo-900 font-bold">
+                <thead className="bg-rose-50 text-rose-900 font-bold">
                   <tr>
                     <th className="px-4 py-3">Party</th>
                     <th className="px-4 py-3">Equity</th>
@@ -502,7 +551,7 @@ function ROICalculatorView({ setToast }) {
                         <td className="px-4 py-3 text-slate-500">{party.capexShare}%</td>
                         <td className="px-4 py-3 font-bold">{currency} {Math.round(invest).toLocaleString()}</td>
                         <td className="px-4 py-3 text-slate-500">{party.profitShare}%</td>
-                        <td className={`px-4 py-3 font-bold ${netMonthly >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{currency} {Math.round(netMonthly).toLocaleString()}</td>
+                        <td className={`px-4 py-3 font-bold ${netMonthly >= 0 ? 'text-rose-700' : 'text-red-500'}`}>{currency} {Math.round(netMonthly).toLocaleString()}</td>
                         <td className="px-4 py-3 font-bold">{invest === 0 ? 'Immediate' : `${roi.toFixed(1)}%`}</td>
                         <td className="px-4 py-3">{invest === 0 ? 'Immediate' : payback > 50 ? '> 50 yrs' : `${payback.toFixed(1)} yrs`}</td>
                       </tr>
@@ -537,7 +586,7 @@ function ROICalculatorView({ setToast }) {
                     {tableData.map(row => (
                       <tr key={row.year} className={row.isReplacement ? 'bg-red-50' : ''}>
                         <td className="px-6 py-3 font-medium">Year {row.year}</td>
-                        <td className="px-6 py-3 text-emerald-600">+{Math.round(row.revenue).toLocaleString()}</td>
+                        <td className="px-6 py-3 text-rose-700">+{Math.round(row.revenue).toLocaleString()}</td>
                         <td className="px-6 py-3 text-red-500">
                           -{Math.round(row.expense).toLocaleString()}
                           {row.isReplacement && <div className="text-xs text-red-700 mt-0.5">(incl. battery replacement)</div>}
@@ -555,16 +604,16 @@ function ROICalculatorView({ setToast }) {
 
           <div className="space-y-6">
             <Card className="p-0 overflow-hidden">
-              <div className="bg-indigo-50 px-5 py-3 border-b border-indigo-100 flex items-center gap-2">
-                <List className="w-4 h-4 text-indigo-700" />
-                <h3 className="font-bold text-indigo-900 text-sm uppercase">Calculation Basis</h3>
+              <div className="bg-rose-50 px-5 py-3 border-b border-rose-100 flex items-center gap-2">
+                <List className="w-4 h-4 text-rose-700" />
+                <h3 className="font-bold text-rose-900 text-sm uppercase">Calculation Basis</h3>
               </div>
               <div className="p-5 space-y-4 text-sm text-slate-600">
                 <div className="space-y-1">
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">Revenue</p>
                   <p className="flex justify-between"><span>Fee:</span><span>{currency} {formData.chargingFee} / kWh</span></p>
                   <p className="flex justify-between"><span>Sessions:</span><span>{formData.chargesPerDay}/day</span></p>
-                  <p className="flex justify-between font-medium text-emerald-700 mt-1"><span>Annual:</span><span>{currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
+                  <p className="flex justify-between font-medium text-rose-800 mt-1"><span>Annual:</span><span>{currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
                 </div>
                 <div className="space-y-1 pt-2">
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">OpEx</p>
@@ -603,11 +652,11 @@ function ROICalculatorView({ setToast }) {
       <div className="mb-8 print:hidden">
         <div className="flex justify-between text-sm font-medium text-slate-500 mb-2">
           {['Location', 'Config', 'Partners', 'Report'].map((label, i) => (
-            <span key={label} className={step >= i + 1 ? 'text-emerald-600 font-bold' : ''}>{i + 1}. {label}</span>
+            <span key={label} className={step >= i + 1 ? 'text-rose-700 font-bold' : ''}>{i + 1}. {label}</span>
           ))}
         </div>
         <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-          <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
+          <div className="h-full bg-rose-700 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
         </div>
       </div>
       {step === 1 && renderStep1()}
@@ -631,10 +680,12 @@ function InteractiveChargingROI() {
   const hi = (field, value) => setScen(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
 
   const dwellH = scen.dwellTimeMin / 60;
+  // Energy per session: charger power × dwell hours, capped at 75 kWh (typical EV battery limit)
+  // Super uses full 180 kW rated power — battery cap naturally limits it (e.g. 60 min = min(180,75) = 75 kWh)
   const energyPerSession = {
-    ac:    Math.min(7      * dwellH, 75),
-    best:  Math.min(28     * dwellH, 75),
-    super: Math.min(66.66  * dwellH, 75),
+    ac:    Math.min(7   * dwellH, 75),
+    best:  Math.min(28  * dwellH, 75),
+    super: Math.min(60  * dwellH, 75),  // capped at 60 kW — standard EV onboard charger limit
   };
 
   const capex = {
@@ -647,22 +698,35 @@ function InteractiveChargingROI() {
     best:  scen.bestCount  * scen.bestReplace,
     super: scen.superCount * scen.superReplace,
   };
+  // Annual revenue = chargers × cars/day × kWh/session × rate/kWh × 365
   const rev = {
     ac:    scen.acCount    * scen.carsPerDayPerCharger * energyPerSession.ac    * scen.acRate  * 365,
     best:  scen.bestCount  * scen.carsPerDayPerCharger * energyPerSession.best  * scen.dcRate  * 365,
     super: scen.superCount * scen.carsPerDayPerCharger * energyPerSession.super * scen.dcRate  * 365,
   };
+  const demandChargeAnnual = scen.superCount > 0 ? scen.superCount * 180 * scen.demandChargePerKw * 12 : 0;
   const opex = {
-    ac:    scen.acCount    * scen.carsPerDayPerCharger * energyPerSession.ac    * scen.mixedGridRate  * 365,
-    best:  scen.bestCount  * scen.carsPerDayPerCharger * energyPerSession.best  * scen.offPeakGridRate * 365,
-    super: (scen.superCount * scen.carsPerDayPerCharger * energyPerSession.super * scen.mixedGridRate * 365) +
-           (scen.superCount > 0 ? scen.superCount * 180 * scen.demandChargePerKw * 12 : 0),
+    ac:    scen.acCount    * scen.carsPerDayPerCharger * energyPerSession.ac    * scen.mixedGridRate   * 365,
+    best:  scen.bestCount  * scen.carsPerDayPerCharger * energyPerSession.best  * scen.offPeakGridRate  * 365,
+    super: (scen.superCount * scen.carsPerDayPerCharger * energyPerSession.super * scen.mixedGridRate * 365) + demandChargeAnnual,
   };
   const net10y = {
     ac:    ((rev.ac    - opex.ac)    * 10) - capex.ac    - replace10y.ac,
     best:  ((rev.best  - opex.best)  * 10) - capex.best  - replace10y.best,
     super: ((rev.super - opex.super) * 10) - capex.super - replace10y.super,
   };
+  // Daily helpers for calc remarks
+  const dailyRev  = {
+    ac:    scen.acCount * scen.carsPerDayPerCharger * energyPerSession.ac * scen.acRate,
+    best:  scen.bestCount * scen.carsPerDayPerCharger * energyPerSession.best * scen.dcRate,
+    super: scen.superCount * scen.carsPerDayPerCharger * energyPerSession.super * scen.dcRate,
+  };
+  const dailyOpex = {
+    ac:    scen.acCount * scen.carsPerDayPerCharger * energyPerSession.ac * scen.mixedGridRate,
+    best:  scen.bestCount * scen.carsPerDayPerCharger * energyPerSession.best * scen.offPeakGridRate,
+    super: (scen.superCount * scen.carsPerDayPerCharger * energyPerSession.super * scen.mixedGridRate) + demandChargeAnnual / 365,
+  };
+  const fmtS = (v) => v >= 1000 ? `$${Math.round(v).toLocaleString()}` : `$${v.toFixed(2)}`;
 
   const maxVal = Math.max(net10y.ac, net10y.best, net10y.super, 100000);
   const minVal = Math.min(net10y.ac, net10y.best, net10y.super, 0);
@@ -693,7 +757,7 @@ function InteractiveChargingROI() {
       <div className="mb-6 border-b border-slate-200 pb-4 flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
-            <TrendingUp className="text-emerald-600 w-6 h-6" /> 10-Year Interactive ROI Modeler
+            <TrendingUp className="text-rose-700 w-6 h-6" /> 10-Year Interactive ROI Modeler
           </h2>
           <p className="text-slate-500 mt-1 text-sm">Adjust sliders and CapEx inputs to stress-test profitability across all three charging architectures.</p>
         </div>
@@ -703,7 +767,7 @@ function InteractiveChargingROI() {
         {/* Controls */}
         <div className="lg:col-span-1 space-y-5 bg-slate-50 p-5 rounded-xl border border-slate-200">
           <h3 className="font-bold flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2">
-            <Sliders className="w-4 h-4 text-indigo-600" /> Usage & Rates
+            <Sliders className="w-4 h-4 text-rose-700" /> Usage & Rates
           </h3>
 
           {[
@@ -713,10 +777,10 @@ function InteractiveChargingROI() {
             <div key={s.field}>
               <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
                 <span>{s.label}</span>
-                <span className="text-emerald-600 font-bold">{scen[s.field]}</span>
+                <span className="text-rose-700 font-bold">{scen[s.field]}</span>
               </label>
               <input type="range" min={s.min} max={s.max} step={s.step} value={scen[s.field]}
-                onChange={e => hi(s.field, e.target.value)} className="w-full accent-emerald-600" />
+                onChange={e => hi(s.field, e.target.value)} className="w-full accent-rose-700" />
             </div>
           ))}
 
@@ -731,7 +795,7 @@ function InteractiveChargingROI() {
                 <label className="block text-[11px] font-medium text-slate-500 mb-1">{f.label}</label>
                 <input type="number" step="0.01" value={scen[f.field]}
                   onChange={e => hi(f.field, e.target.value)}
-                  className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-emerald-500" />
+                  className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-rose-700" />
               </div>
             ))}
           </div>
@@ -739,7 +803,7 @@ function InteractiveChargingROI() {
           <div className="pt-2 border-t border-slate-200">
             <label className="block text-[11px] font-medium text-slate-500 mb-1">Demand Charge ($/kW/mo)</label>
             <input type="number" value={scen.demandChargePerKw} onChange={e => hi('demandChargePerKw', e.target.value)}
-              className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-emerald-500" />
+              className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-rose-700" />
           </div>
         </div>
 
@@ -747,9 +811,9 @@ function InteractiveChargingROI() {
         <div className="lg:col-span-3 space-y-6">
           {/* CapEx editor */}
           <div className="overflow-x-auto border border-indigo-100 rounded-xl shadow-sm">
-            <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
+            <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center gap-2">
               <Settings className="w-4 h-4 text-indigo-700" />
-              <h3 className="font-bold text-indigo-900 text-sm">System Configuration & CapEx</h3>
+              <h3 className="font-bold text-rose-900 text-sm">System Configuration & CapEx</h3>
             </div>
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
@@ -765,7 +829,7 @@ function InteractiveChargingROI() {
               <tbody className="divide-y divide-slate-100">
                 {[
                   { label: 'AC (7kW)',       color: 'text-slate-700',  bg: '',                  prefix: 'ac',    borderColor: 'border' },
-                  { label: 'B.E.S.T (28kW)', color: 'text-emerald-700', bg: 'bg-emerald-50/30', prefix: 'best',  borderColor: 'border-emerald-200' },
+                  { label: 'B.E.S.T (28kW)', color: 'text-rose-800', bg: 'bg-rose-50/30', prefix: 'best',  borderColor: 'border-rose-200' },
                   { label: 'Super (180kW)',  color: 'text-indigo-700',  bg: 'bg-indigo-50/30',  prefix: 'super', borderColor: 'border-indigo-200' },
                 ].map(row => (
                   <tr key={row.prefix} className={`hover:brightness-95 ${row.bg}`}>
@@ -775,7 +839,7 @@ function InteractiveChargingROI() {
                       return (
                         <td key={key} className="px-4 py-2">
                           <input type="number" value={scen[key]} onChange={e => hi(key, e.target.value)}
-                            className={`w-full p-1.5 border ${row.borderColor} rounded text-sm focus:ring-2 focus:ring-emerald-500`} />
+                            className={`w-full p-1.5 border ${row.borderColor} rounded text-sm focus:ring-2 focus:ring-rose-700`} />
                         </td>
                       );
                     })}
@@ -795,7 +859,7 @@ function InteractiveChargingROI() {
                 </div>
               )}
               <BarItem value={net10y.ac}    color="bg-slate-400" label={`AC (${scen.acCount})`} />
-              <BarItem value={net10y.best}  color="bg-emerald-500 shadow-lg ring-2 ring-emerald-200" label={`B.E.S.T (${scen.bestCount})`} />
+              <BarItem value={net10y.best}  color="bg-rose-700 shadow-lg ring-2 ring-rose-200" label={`B.E.S.T (${scen.bestCount})`} />
               <BarItem value={net10y.super} color="bg-indigo-500" label={`Super (${scen.superCount})`} />
             </div>
 
@@ -804,34 +868,117 @@ function InteractiveChargingROI() {
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
-                    <th className="px-3 py-2 text-xs">Metric (10y)</th>
-                    <th className="px-3 py-2 text-xs text-center">AC</th>
-                    <th className="px-3 py-2 text-xs text-center text-emerald-700 bg-emerald-50">B.E.S.T</th>
-                    <th className="px-3 py-2 text-xs text-center">Super</th>
+                    <th className="px-3 py-2 text-xs w-36">Metric</th>
+                    <th className="px-3 py-2 text-xs text-center">AC ({scen.acCount}x)</th>
+                    <th className="px-3 py-2 text-xs text-center font-bold text-rose-700 bg-rose-50">B.E.S.T ({scen.bestCount}x)</th>
+                    <th className="px-3 py-2 text-xs text-center">Super ({scen.superCount}x)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {[
-                    { label: 'Setup CapEx',       vals: [capex.ac,       capex.best,       capex.super],       neg: true },
-                    { label: 'Replacements',       vals: [replace10y.ac,  replace10y.best,  replace10y.super],  neg: true, clr: 'text-amber-600' },
-                    { label: 'Gross Revenue',      vals: [rev.ac * 10,    rev.best * 10,    rev.super * 10],    neg: false },
-                    { label: 'Grid/Demand OpEx',   vals: [opex.ac * 10,   opex.best * 10,   opex.super * 10],   neg: true },
-                  ].map((row, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 font-medium text-slate-500 text-xs">{row.label}</td>
-                      {row.vals.map((v, j) => (
-                        <td key={j} className={`px-3 py-2 font-mono text-right text-xs ${row.clr || (row.neg ? 'text-red-500' : 'text-slate-700')} ${j === 1 ? 'bg-emerald-50/50' : ''}`}>
-                          {row.neg ? '-' : ''}{fmt(v)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  <tr className="bg-slate-50 border-t-2 border-slate-200">
-                    <td className="px-3 py-3 font-bold text-slate-800 text-xs">Net 10-Year</td>
-                    <td className={`px-3 py-3 font-mono font-bold text-right text-xs ${net10y.ac >= 0 ? 'text-slate-800' : 'text-red-600'}`}>{fmt(net10y.ac)}</td>
-                    <td className="px-3 py-3 font-mono font-bold text-right text-sm text-emerald-700 bg-emerald-100/50 border-x border-emerald-200">{fmt(net10y.best)}</td>
-                    <td className={`px-3 py-3 font-mono font-bold text-right text-xs ${net10y.super >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>{fmt(net10y.super)}</td>
+                <tbody className="divide-y divide-slate-100 text-xs">
+
+                  {/* CAPEX */}
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-slate-700">Setup CapEx</td>
+                    {[capex.ac, capex.best, capex.super].map((v, j) => (
+                      <td key={j} className={`px-3 py-2 font-mono text-right ${j===1?'bg-rose-50/40':''}`}>
+                        <div className="text-red-500 font-bold">-{fmt(v)}</div>
+                      </td>
+                    ))}
                   </tr>
+                  <tr className="bg-slate-50/60">
+                    <td className="px-3 pb-2 text-slate-400 italic text-[10px] pl-4">HW + Install + Fixed</td>
+                    {[
+                      `${scen.acCount}×(${scen.acHardware.toLocaleString()}+${scen.acInstall.toLocaleString()})+${scen.acFixed.toLocaleString()}`,
+                      `${scen.bestCount}×(${scen.bestHardware.toLocaleString()}+${scen.bestInstall.toLocaleString()})+${scen.bestFixed.toLocaleString()}`,
+                      `${scen.superCount}×(${scen.superHardware.toLocaleString()}+${scen.superInstall.toLocaleString()})+${scen.superFixed.toLocaleString()}`,
+                    ].map((r, j) => (
+                      <td key={j} className={`px-3 pb-2 font-mono text-right text-slate-400 text-[10px] ${j===1?'bg-rose-50/40':''}`}>{r}</td>
+                    ))}
+                  </tr>
+
+                  {/* Replacements */}
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-slate-700">10y Replacements</td>
+                    {[replace10y.ac, replace10y.best, replace10y.super].map((v, j) => (
+                      <td key={j} className={`px-3 py-2 font-mono text-right ${j===1?'bg-rose-50/40':''}`}>
+                        <div className="text-amber-600 font-bold">-{fmt(v)}</div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="bg-slate-50/60">
+                    <td className="px-3 pb-2 text-slate-400 italic text-[10px] pl-4">Qty × repl cost/unit</td>
+                    {[
+                      `${scen.acCount}×${scen.acReplace.toLocaleString()}`,
+                      `${scen.bestCount}×${scen.bestReplace.toLocaleString()}`,
+                      `${scen.superCount}×${scen.superReplace.toLocaleString()}`,
+                    ].map((r, j) => (
+                      <td key={j} className={`px-3 pb-2 font-mono text-right text-slate-400 text-[10px] ${j===1?'bg-rose-50/40':''}`}>{r}</td>
+                    ))}
+                  </tr>
+
+                  {/* Gross Revenue */}
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-slate-700">Gross Revenue <span className="font-normal text-slate-400">(10y)</span></td>
+                    {[rev.ac * 10, rev.best * 10, rev.super * 10].map((v, j) => (
+                      <td key={j} className={`px-3 py-2 font-mono text-right ${j===1?'bg-rose-50/40':''}`}>
+                        <div className="text-rose-800 font-bold">{fmt(v)}</div>
+                        <div className="text-slate-400 text-[10px]">{fmtS([dailyRev.ac,dailyRev.best,dailyRev.super][j])}/day · {fmt([rev.ac,rev.best,rev.super][j])}/yr</div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="bg-slate-50/60">
+                    <td className="px-3 pb-2 text-slate-400 italic text-[10px] pl-4">Qty × cars/day × kWh × rate × 365</td>
+                    {[
+                      { cnt: scen.acCount,    rate: scen.acRate,  kwh: energyPerSession.ac },
+                      { cnt: scen.bestCount,  rate: scen.dcRate,  kwh: energyPerSession.best },
+                      { cnt: scen.superCount, rate: scen.dcRate,  kwh: energyPerSession.super },
+                    ].map((r, j) => (
+                      <td key={j} className={`px-3 pb-2 font-mono text-right text-slate-400 text-[10px] ${j===1?'bg-rose-50/40':''}`}>
+                        {r.cnt}×{scen.carsPerDayPerCharger}×{r.kwh.toFixed(1)}kWh×${r.rate}×365
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* OpEx */}
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-slate-700">Grid/Demand OpEx <span className="font-normal text-slate-400">(10y)</span></td>
+                    {[opex.ac * 10, opex.best * 10, opex.super * 10].map((v, j) => (
+                      <td key={j} className={`px-3 py-2 font-mono text-right ${j===1?'bg-rose-50/40':''}`}>
+                        <div className="text-red-500 font-bold">-{fmt(v)}</div>
+                        <div className="text-slate-400 text-[10px]">{fmtS([dailyOpex.ac,dailyOpex.best,dailyOpex.super][j])}/day · {fmt([opex.ac,opex.best,opex.super][j])}/yr</div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="bg-slate-50/60">
+                    <td className="px-3 pb-2 text-slate-400 italic text-[10px] pl-4">Energy×grid rate (B.E.S.T=off-peak; Super+demand)</td>
+                    {[
+                      { rate: scen.mixedGridRate,    kwh: energyPerSession.ac,    extra: '' },
+                      { rate: scen.offPeakGridRate,  kwh: energyPerSession.best,  extra: '' },
+                      { rate: scen.mixedGridRate,    kwh: energyPerSession.super,  extra: `+$${Math.round(demandChargeAnnual).toLocaleString()}/yr demand` },
+                    ].map((r, j) => (
+                      <td key={j} className={`px-3 pb-2 font-mono text-right text-slate-400 text-[10px] ${j===1?'bg-rose-50/40':''}`}>
+                        {r.kwh.toFixed(1)}kWh×${r.rate}{r.extra && <span className="block">{r.extra}</span>}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Net */}
+                  <tr className="bg-slate-100 border-t-2 border-slate-300">
+                    <td className="px-3 py-3 font-bold text-slate-800">Net 10-Year</td>
+                    <td className={`px-3 py-3 font-mono font-bold text-right ${net10y.ac >= 0 ? 'text-slate-800' : 'text-red-600'}`}>
+                      <div className="text-sm">{fmt(net10y.ac)}</div>
+                      <div className="text-[10px] font-normal text-slate-400">(Rev−OpEx)×10 − CapEx − Repl</div>
+                    </td>
+                    <td className="px-3 py-3 font-mono font-bold text-right text-rose-800 bg-rose-100/50 border-x border-rose-200">
+                      <div className="text-sm">{fmt(net10y.best)}</div>
+                      <div className="text-[10px] font-normal text-rose-600">(Rev−OpEx)×10 − CapEx − Repl</div>
+                    </td>
+                    <td className={`px-3 py-3 font-mono font-bold text-right ${net10y.super >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
+                      <div className="text-sm">{fmt(net10y.super)}</div>
+                      <div className="text-[10px] font-normal text-slate-400">(Rev−OpEx)×10 − CapEx − Repl</div>
+                    </td>
+                  </tr>
+
                 </tbody>
               </table>
             </div>

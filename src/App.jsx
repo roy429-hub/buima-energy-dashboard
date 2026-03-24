@@ -453,7 +453,7 @@ function ROICalculatorView({ setToast }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
           {/* CAPEX */}
-          <Card className="p-4 bg-slate-800 text-white">
+          <Card className="p-4 bg-rose-700 text-white">
             <p className="text-slate-400 text-xs mb-1 uppercase tracking-wide">Total CAPEX</p>
             <p className="text-2xl font-bold mb-3">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
             <div className="border-t border-slate-700 pt-3 space-y-1 text-xs font-mono">

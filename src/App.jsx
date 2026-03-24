@@ -464,7 +464,7 @@ function ROICalculatorView({ setToast }) {
               {formData.pvCost > 0    && <p className="flex justify-between text-slate-300"><span>PV System</span><span>{formData.pvCost.toLocaleString()}</span></p>}
               {formData.standRequired && <p className="flex justify-between text-slate-300"><span>Stand</span><span>{formData.standCost.toLocaleString()}</span></p>}
               <p className="flex justify-between text-slate-300"><span>Labor</span><span>{formData.laborCost.toLocaleString()}</span></p>
-              <p className="flex justify-between text-white font-bold border-t border-slate-600 pt-1 mt-1"><span>= Total</span><span>{totalCapex.toLocaleString(undefined,{maximumFractionDigits:0})}</span></p>
+              <p className="flex justify-between text-slate-300 font-bold border-t border-slate-600 pt-1 mt-1"><span>= Total</span><span>{totalCapex.toLocaleString(undefined,{maximumFractionDigits:0})}</span></p>
             </div>
           </Card>
 

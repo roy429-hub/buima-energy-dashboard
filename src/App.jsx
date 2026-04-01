@@ -122,6 +122,7 @@ export default function App() {
             {[
               { id: 'roi', label: 'ROI Calc' },
               { id: 'modeler', label: 'Compare ROI' },
+              { id: 'lcos', label: 'LCOS' },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-700 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-rose-700'}`}>
@@ -135,6 +136,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none">
         {activeTab === 'roi'     && <ROICalculatorView setToast={setToastMsg} />}
         {activeTab === 'modeler' && <InteractiveChargingROI />}
+        {activeTab === 'lcos'    && <LCOSComparison />}
       </main>
     </div>
   );
@@ -288,6 +290,43 @@ function ROICalculatorView({ setToast }) {
           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Battery className="w-5 h-5 text-rose-700" /> B.E.S.T. & PCS</h3>
           <InputField label="B.E.S.T. Quantity (Sets)" value={formData.bestQty} onChange={e => hi('bestQty', parseFloat(e.target.value))} type="number" note="1 Set = 4 Tiles (approx 16kWh)" />
           <InputField label="B.E.S.T. Lifecycle" value={formData.lifecycle} onChange={e => hi('lifecycle', parseFloat(e.target.value))} type="number" suffix="Cycles" note="Default: 8000 cycles @ 1C" />
+
+          {/* Degradation Toggle */}
+          <div className={`rounded-xl border-2 transition-colors mb-4 ${formData.degradationEnabled ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="flex items-center justify-between px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-slate-800">Consider Battery Degradation</p>
+                <p className="text-xs text-slate-500 mt-0.5">Revenue declines year-by-year as capacity fades</p>
+              </div>
+              <button onClick={() => hi('degradationEnabled', !formData.degradationEnabled)}
+                className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${formData.degradationEnabled ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${formData.degradationEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            {formData.degradationEnabled && (
+              <div className="px-4 pb-4 pt-1 border-t border-amber-200">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  End-of-Life Capacity Retention
+                  <span className="ml-2 text-xs text-amber-700 font-normal">Battery retains this % at end of cycle life</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="50" max="95" step="5" value={formData.eolRetention}
+                    onChange={e => hi('eolRetention', parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-500" />
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="50" max="95" value={formData.eolRetention}
+                      onChange={e => hi('eolRetention', parseFloat(e.target.value))}
+                      className="w-16 border rounded-md px-2 py-1 text-sm text-center font-bold border-amber-300 focus:ring-amber-400" />
+                    <span className="text-sm font-bold text-amber-700">%</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-amber-700 bg-amber-100 rounded-lg px-3 py-2">
+                  Avg usable capacity = ({formData.eolRetention}% + 100%) ÷ 2 = <strong>{((formData.eolRetention + 100) / 2).toFixed(1)}%</strong> of {formData.bestQty * 16} kWh = <strong>{(formData.bestQty * 16 * (formData.eolRetention + 100) / 200).toFixed(1)} kWh avg/cycle</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
           <InputField label="Cost per Set" value={formData.bestCost} onChange={e => hi('bestCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />
           <div className="grid grid-cols-2 gap-4">
             <InputField label="PCS Power" value={formData.pcsKw} onChange={e => hi('pcsKw', parseFloat(e.target.value))} type="number" suffix="kW" />
@@ -391,50 +430,79 @@ function ROICalculatorView({ setToast }) {
     const { currency } = formData;
     const outputKw = (formData.bestQty * 28) + formData.pcsKw;
     const effectivePower = Math.min(outputKw, formData.chargerRatingKw);
+    // Base energy/session and revenue at 100% capacity (Year 1 start)
     const energyPerSession = formData.avgChargeHours * effectivePower;
-    const dailyEnergySold = formData.chargesPerDay * energyPerSession;
+    const dailyEnergySold  = formData.chargesPerDay * energyPerSession;
 
-    const dailyEvRev = dailyEnergySold * formData.chargingFee;
+    const dailyEvRev    = dailyEnergySold * formData.chargingFee;
     const dailyOtherRev = formData.otherRevenueDaily || 0;
-    const dailyRevDisplay = parseFloat((dailyEvRev + dailyOtherRev).toFixed(2));
-    const annualRevenue = dailyRevDisplay * 365;
+    const baseAnnualRevenue = (dailyEvRev + dailyOtherRev) * 365;
 
-    const dailyPvGen = formData.pvKw * formData.sunHours * (formData.pvEfficiency / 100);
+    const dailyPvGen    = formData.pvKw * formData.sunHours * (formData.pvEfficiency / 100);
     const dailyGridDraw = Math.max(0, dailyEnergySold - dailyPvGen);
     const dailyGridCost = dailyGridDraw * formData.gridPrice;
     const dailyOtherCost = formData.otherCostDaily || 0;
-    const dailyOpEx = parseFloat((dailyGridCost + dailyOtherCost).toFixed(2));
-    const annualOpEx = dailyOpEx * 365;
-    const annualProfit = annualRevenue - annualOpEx;
+    const baseAnnualOpEx = (dailyGridCost + dailyOtherCost) * 365;
 
-    const totalCapex = (formData.bestQty * formData.bestCost) + formData.pcsCost + formData.evChargerCost + formData.pvCost + (formData.standRequired ? formData.standCost : 0) + formData.laborCost;
-
-    const totalCapKwh = formData.bestQty * 16;
-    const cyclesPerDay = totalCapKwh > 0 ? (formData.chargesPerDay * Math.min(energyPerSession, totalCapKwh)) / totalCapKwh : 0;
+    // ── Degradation model ─────────────────────────────────────────────────
+    // Capacity factor at the midpoint of year N (after any reset from replacement):
+    //   factor = 1 - (cyclesUsedAtMidYear / lifecycle) × drop
+    //   where drop = 1 - eolRetention/100
+    // Revenue and grid OpEx both scale with capacity factor (less energy = less revenue AND less grid draw)
+    // Other fixed costs (otherCostDaily) do NOT scale with degradation
+    const degradationOn   = formData.degradationEnabled;
+    const eolFraction     = formData.eolRetention / 100;   // e.g. 0.70
+    const drop            = 1 - eolFraction;               // e.g. 0.30
+    const totalCapKwh     = formData.bestQty * 16;
+    const cyclesPerDay    = totalCapKwh > 0 ? (formData.chargesPerDay * Math.min(energyPerSession, totalCapKwh)) / totalCapKwh : 0;
+    const cyclesPerYear   = cyclesPerDay * 365;
     const replacementInterval = Math.ceil((cyclesPerDay > 0 ? formData.lifecycle / cyclesPerDay : 999999) / 365);
     const replacementCost = (formData.bestQty * formData.bestCost) * 0.70;
 
-    const cashFlows = [-totalCapex];
-    const tableData = [];
-    let cumulative = -totalCapex;
+    // Get capacity factor for a given year, accounting for prior replacements
+    const getCapFactor = (yearN) => {
+      if (!degradationOn) return 1;
+      const yearsIntoCurrentBattery = ((yearN - 1) % replacementInterval) + 1;
+      const cyclesMidYear = (yearsIntoCurrentBattery - 0.5) * cyclesPerYear;
+      const rawFactor = 1 - (cyclesMidYear / formData.lifecycle) * drop;
+      return Math.max(eolFraction, Math.min(1, rawFactor));
+    };
+
+    const cashFlows  = [-( (formData.bestQty * formData.bestCost) + formData.pcsCost + formData.evChargerCost + formData.pvCost + (formData.standRequired ? formData.standCost : 0) + formData.laborCost )];
+    const totalCapex = -cashFlows[0];
+    const tableData  = [];
+    let cumulative   = -totalCapex;
 
     for (let i = 1; i <= 10; i++) {
-      const isReplacement = (i % replacementInterval === 0);
-      let flow = annualProfit;
+      const capFactor       = getCapFactor(i);
+      // Revenue scales fully with capacity
+      const yearRevenue     = baseAnnualRevenue * capFactor;
+      // Grid OpEx scales with capacity (less energy delivered = less grid draw); fixed other costs unchanged
+      const scaledGridOpEx  = (dailyGridCost * 365) * capFactor;
+      const yearOpEx        = scaledGridOpEx + (dailyOtherCost * 365);
+      const isReplacement   = (i % replacementInterval === 0);
       let salvage = 0;
+      let flow = yearRevenue - yearOpEx;
       if (isReplacement) {
         flow -= replacementCost;
         if (i === 10) { salvage = replacementCost * 0.9; flow += salvage; }
       }
       cashFlows.push(flow);
       cumulative += flow;
-      tableData.push({ year: i, revenue: annualRevenue, expense: annualOpEx + (isReplacement ? replacementCost : 0), salvage, net: flow, cumulative, isReplacement });
+      tableData.push({ year: i, revenue: yearRevenue, expense: yearOpEx + (isReplacement ? replacementCost : 0),
+        salvage, net: flow, cumulative, isReplacement, capFactor });
     }
 
-    const irrValue = calculateIRR(cashFlows);
-    const roiYears = annualProfit > 0 ? totalCapex / annualProfit : 0;
-    const roiPercent = (cumulative / totalCapex) * 100;
-    const replacementsIn10y = Math.floor(10 / replacementInterval);
+    // For KPI cards use Year-1 values (full capacity) as the "headline" figure
+    const annualRevenue = tableData[0].revenue;
+    const annualOpEx    = tableData[0].expense - (tableData[0].isReplacement ? replacementCost : 0);
+    const annualProfit  = annualRevenue - annualOpEx;
+    const avgAnnualProfit = tableData.reduce((s, r) => s + r.net, 0) / 10;
+
+    const irrValue    = calculateIRR(cashFlows);
+    const roiYears    = avgAnnualProfit > 0 ? totalCapex / avgAnnualProfit : 0;
+    const roiPercent  = (cumulative / totalCapex) * 100;
+    const replacementsIn10y   = Math.floor(10 / replacementInterval);
     const totalReplacement10y = replacementCost * replacementsIn10y;
 
     return (
@@ -453,20 +521,20 @@ function ROICalculatorView({ setToast }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
           {/* CAPEX */}
-          <Card className="p-4 bg-rose-700 text-black">
+          <div className="bg-slate-800 text-white rounded-xl shadow-sm border border-slate-700 overflow-hidden p-4">
             <p className="text-slate-400 text-xs mb-1 uppercase tracking-wide">Total CAPEX</p>
-            <p className="text-2xl font-bold mb-3">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-            <div className="border-t border-slate-700 pt-3 space-y-1 text-xs font-mono">
+            <p className="text-2xl font-bold text-white mb-3">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <div className="border-t border-slate-600 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-400 font-sans font-semibold mb-2 not-italic">Breakdown:</p>
               <p className="flex justify-between text-slate-300"><span>B.E.S.T × {formData.bestQty}</span><span>{(formData.bestQty * formData.bestCost).toLocaleString()}</span></p>
               <p className="flex justify-between text-slate-300"><span>PCS</span><span>{formData.pcsCost.toLocaleString()}</span></p>
               {formData.evChargerCost > 0 && <p className="flex justify-between text-slate-300"><span>EV Charger</span><span>{formData.evChargerCost.toLocaleString()}</span></p>}
-              {formData.pvCost > 0    && <p className="flex justify-between text-slate-300"><span>PV System</span><span>{formData.pvCost.toLocaleString()}</span></p>}
+              {formData.pvCost > 0 && <p className="flex justify-between text-slate-300"><span>PV System</span><span>{formData.pvCost.toLocaleString()}</span></p>}
               {formData.standRequired && <p className="flex justify-between text-slate-300"><span>Stand</span><span>{formData.standCost.toLocaleString()}</span></p>}
               <p className="flex justify-between text-slate-300"><span>Labor</span><span>{formData.laborCost.toLocaleString()}</span></p>
-              <p className="flex justify-between text-slate-300 font-bold border-t border-slate-600 pt-1 mt-1"><span>= Total</span><span>{totalCapex.toLocaleString(undefined,{maximumFractionDigits:0})}</span></p>
+              <p className="flex justify-between text-white font-bold border-t border-slate-600 pt-1 mt-1"><span>= Total</span><span>{totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></p>
             </div>
-          </Card>
+          </div>
 
           {/* Annual Net Profit */}
           <Card className="p-4">
@@ -575,25 +643,34 @@ function ROICalculatorView({ setToast }) {
                 <table className="w-full text-sm text-left">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
-                      <th className="px-6 py-3">Year</th>
-                      <th className="px-6 py-3">Revenue</th>
-                      <th className="px-6 py-3">OpEx</th>
-                      <th className="px-6 py-3">Net Flow</th>
-                      <th className="px-6 py-3">Cumulative</th>
+                      <th className="px-4 py-3">Year</th>
+                      {formData.degradationEnabled && <th className="px-4 py-3 text-amber-600">Batt. Cap.</th>}
+                      <th className="px-4 py-3">Revenue</th>
+                      <th className="px-4 py-3">OpEx</th>
+                      <th className="px-4 py-3">Net Flow</th>
+                      <th className="px-4 py-3">Cumulative</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {tableData.map(row => (
                       <tr key={row.year} className={row.isReplacement ? 'bg-red-50' : ''}>
-                        <td className="px-6 py-3 font-medium">Year {row.year}</td>
-                        <td className="px-6 py-3 text-rose-700">+{Math.round(row.revenue).toLocaleString()}</td>
-                        <td className="px-6 py-3 text-red-500">
+                        <td className="px-4 py-3 font-medium">Year {row.year}</td>
+                        {formData.degradationEnabled && (
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${row.capFactor >= 0.90 ? 'bg-green-100 text-green-700' : row.capFactor >= 0.80 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              {(row.capFactor * 100).toFixed(1)}%
+                            </span>
+                            {row.isReplacement && <div className="text-[10px] text-blue-600 mt-0.5">↺ reset</div>}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-rose-700">+{Math.round(row.revenue).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-red-500">
                           -{Math.round(row.expense).toLocaleString()}
                           {row.isReplacement && <div className="text-xs text-red-700 mt-0.5">(incl. battery replacement)</div>}
                           {row.salvage > 0 && <div className="text-xs text-green-600">+{Math.round(row.salvage).toLocaleString()} salvage</div>}
                         </td>
-                        <td className="px-6 py-3 font-bold">{Math.round(row.net).toLocaleString()}</td>
-                        <td className={`px-6 py-3 ${row.cumulative > 0 ? 'text-green-600' : 'text-slate-500'}`}>{Math.round(row.cumulative).toLocaleString()}</td>
+                        <td className="px-4 py-3 font-bold">{Math.round(row.net).toLocaleString()}</td>
+                        <td className={`px-4 py-3 ${row.cumulative > 0 ? 'text-green-600' : 'text-slate-500'}`}>{Math.round(row.cumulative).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -982,6 +1059,248 @@ function InteractiveChargingROI() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LCOS COMPARISON ─────────────────────────────────────────────────────────
+function LCOSComparison() {
+  const emptySystem = (id) => ({
+    id, name: `System ${id}`,
+    capacityKwh: 16,
+    eolRetention: 70,
+    lifecycleCycles: 8000,
+    totalCost: 500000,
+    active: id <= 2,
+  });
+
+  const [systems, setSystems] = useState([
+    { ...emptySystem(1), name: 'B.E.S.T (8k cycles)',  lifecycleCycles: 8000,  eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
+    { ...emptySystem(2), name: 'B.E.S.T (10k cycles)', lifecycleCycles: 10000, eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
+    { ...emptySystem(3), name: 'Competitor A',          lifecycleCycles: 6000,  eolRetention: 80, capacityKwh: 20, totalCost: 450000, active: false },
+    { ...emptySystem(4), name: 'Competitor B',          lifecycleCycles: 5000,  eolRetention: 75, capacityKwh: 24, totalCost: 380000, active: false },
+  ]);
+
+  const updateSystem = (id, field, value) =>
+    setSystems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  const toggleSystem = (id) =>
+    setSystems(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s));
+
+  // LCOS formula:
+  //   avgCapacity = capacity × (1 + eolRetention/100) / 2
+  //   lifetimeKwh = avgCapacity × cycles
+  //   costPerKwh  = totalCost / lifetimeKwh
+  const calcLCOS = (s) => {
+    const avgCap     = s.capacityKwh * (1 + s.eolRetention / 100) / 2;
+    const lifetimeKwh = avgCap * s.lifecycleCycles;
+    const costPerKwh  = lifetimeKwh > 0 ? s.totalCost / lifetimeKwh : 0;
+    return { avgCap, lifetimeKwh, costPerKwh };
+  };
+
+  const active = systems.filter(s => s.active);
+  const results = active.map(s => ({ ...s, ...calcLCOS(s) }));
+  const bestCpkwh = results.length > 0 ? Math.min(...results.map(r => r.costPerKwh)) : 0;
+
+  const COLORS = ['bg-rose-600', 'bg-indigo-600', 'bg-emerald-600', 'bg-amber-500'];
+  const TEXT   = ['text-rose-700', 'text-indigo-700', 'text-emerald-700', 'text-amber-600'];
+  const BORDER = ['border-rose-300', 'border-indigo-300', 'border-emerald-300', 'border-amber-300'];
+  const BG     = ['bg-rose-50', 'bg-indigo-50', 'bg-emerald-50', 'bg-amber-50'];
+
+  const maxCost = results.length > 0 ? Math.max(...results.map(r => r.costPerKwh)) : 1;
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 mb-1">
+          <Battery className="w-7 h-7 text-rose-700" /> Battery LCOS Comparison
+        </h1>
+        <p className="text-slate-500 text-sm">
+          Levelized Cost of Storage — how much does each kWh delivered over the battery's lifetime actually cost?
+          Formula: <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs">Cost ÷ (Capacity × avg_retention × Cycles)</span>
+        </p>
+      </div>
+
+      {/* System Config Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {systems.map((s, idx) => (
+          <div key={s.id} className={`rounded-xl border-2 transition-all ${s.active ? `${BORDER[idx]} shadow-sm` : 'border-slate-200 opacity-50'}`}>
+            {/* Header */}
+            <div className={`px-4 py-3 flex items-center justify-between rounded-t-xl ${s.active ? BG[idx] : 'bg-slate-50'}`}>
+              <input
+                value={s.name}
+                onChange={e => updateSystem(s.id, 'name', e.target.value)}
+                className={`text-sm font-bold bg-transparent border-none outline-none w-full ${s.active ? TEXT[idx] : 'text-slate-400'}`}
+                placeholder={`System ${s.id}`}
+              />
+              <button onClick={() => toggleSystem(s.id)}
+                className={`w-10 h-5 rounded-full flex-shrink-0 ml-2 relative transition-colors ${s.active ? COLORS[idx] : 'bg-slate-300'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${s.active ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+
+            {/* Inputs */}
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Capacity per Set (kWh)</label>
+                <input type="number" value={s.capacityKwh} onChange={e => updateSystem(s.id, 'capacityKwh', parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-rose-300 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">EOL Retention (%)</label>
+                <div className="flex items-center gap-2">
+                  <input type="range" min="50" max="95" step="5" value={s.eolRetention}
+                    onChange={e => updateSystem(s.id, 'eolRetention', parseFloat(e.target.value))}
+                    className={`flex-1 ${s.active ? 'accent-rose-600' : ''}`} />
+                  <span className="text-sm font-bold text-slate-700 w-10 text-right">{s.eolRetention}%</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Lifecycle @ 1C (Cycles)</label>
+                <input type="number" value={s.lifecycleCycles} onChange={e => updateSystem(s.id, 'lifecycleCycles', parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-rose-300 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Total System Cost ($)</label>
+                <input type="number" value={s.totalCost} onChange={e => updateSystem(s.id, 'totalCost', parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-rose-300 outline-none" />
+              </div>
+            </div>
+
+            {/* LCOS Result */}
+            {s.active && (() => {
+              const r = calcLCOS(s);
+              const isBest = Math.abs(r.costPerKwh - bestCpkwh) < 0.0001;
+              return (
+                <div className={`mx-4 mb-4 p-3 rounded-xl ${BG[idx]} border ${BORDER[idx]}`}>
+                  <div className="flex justify-between items-baseline mb-2">
+                    <span className="text-xs font-semibold text-slate-600">Cost / kWh</span>
+                    {isBest && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">★ BEST</span>}
+                  </div>
+                  <p className={`text-2xl font-black ${TEXT[idx]}`}>${r.costPerKwh.toFixed(4)}</p>
+                  <div className="mt-2 space-y-1 text-[10px] text-slate-500 font-mono">
+                    <p>Avg cap: {s.capacityKwh} × {((1 + s.eolRetention/100)/2*100).toFixed(1)}% = {r.avgCap.toFixed(1)} kWh</p>
+                    <p>Lifetime: {r.avgCap.toFixed(1)} × {s.lifecycleCycles.toLocaleString()} = {Math.round(r.lifetimeKwh).toLocaleString()} kWh</p>
+                    <p>${s.totalCost.toLocaleString()} ÷ {Math.round(r.lifetimeKwh).toLocaleString()} kWh</p>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+
+      {/* Bar Chart Comparison */}
+      {results.length > 0 && (
+        <Card className="p-6">
+          <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-rose-700" /> Cost per kWh — Visual Comparison
+            <span className="text-xs font-normal text-slate-400 ml-2">Lower = cheaper per unit of energy delivered over lifetime</span>
+          </h3>
+          <div className="space-y-4">
+            {results.sort((a, b) => a.costPerKwh - b.costPerKwh).map((r, i) => {
+              const origIdx = systems.findIndex(s => s.id === r.id);
+              const pct = maxCost > 0 ? (r.costPerKwh / maxCost) * 100 : 0;
+              const isBest = i === 0;
+              return (
+                <div key={r.id}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-sm font-bold ${TEXT[origIdx]}`}>{r.name}</span>
+                    <div className="flex items-center gap-2">
+                      {isBest && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">★ Most Cost-Effective</span>}
+                      <span className="text-sm font-black text-slate-800">${r.costPerKwh.toFixed(4)}<span className="text-xs font-normal text-slate-400"> /kWh</span></span>
+                    </div>
+                  </div>
+                  <div className="h-8 bg-slate-100 rounded-lg overflow-hidden relative">
+                    <div className={`h-full ${COLORS[origIdx]} rounded-lg transition-all duration-500 flex items-center justify-end pr-3`}
+                      style={{ width: `${pct}%` }}>
+                      <span className="text-white text-xs font-bold">{Math.round(r.lifetimeKwh).toLocaleString()} kWh lifetime</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                    <span>{r.capacityKwh} kWh × {((1+r.eolRetention/100)/2*100).toFixed(1)}% avg × {r.lifecycleCycles.toLocaleString()} cyc</span>
+                    <span>${r.totalCost.toLocaleString()} total cost</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Detail Table */}
+      {results.length > 1 && (
+        <Card className="overflow-hidden">
+          <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
+            <h3 className="font-bold text-slate-800">Full Comparison Table</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3">System</th>
+                  <th className="px-5 py-3">Capacity</th>
+                  <th className="px-5 py-3">EOL Retention</th>
+                  <th className="px-5 py-3">Avg. Cap/Cycle</th>
+                  <th className="px-5 py-3">Lifecycle</th>
+                  <th className="px-5 py-3">Lifetime kWh</th>
+                  <th className="px-5 py-3">Total Cost</th>
+                  <th className="px-5 py-3 font-bold text-slate-700">$/kWh</th>
+                  <th className="px-5 py-3">vs Best</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {results.sort((a,b) => a.costPerKwh - b.costPerKwh).map((r, i) => {
+                  const origIdx = systems.findIndex(s => s.id === r.id);
+                  const vsBest  = i === 0 ? null : ((r.costPerKwh - results[0].costPerKwh) / results[0].costPerKwh * 100);
+                  return (
+                    <tr key={r.id} className={i === 0 ? 'bg-green-50' : ''}>
+                      <td className={`px-5 py-3 font-bold ${TEXT[origIdx]}`}>{r.name}</td>
+                      <td className="px-5 py-3">{r.capacityKwh} kWh</td>
+                      <td className="px-5 py-3">{r.eolRetention}%</td>
+                      <td className="px-5 py-3 font-mono">{r.avgCap.toFixed(2)} kWh</td>
+                      <td className="px-5 py-3 font-mono">{r.lifecycleCycles.toLocaleString()}</td>
+                      <td className="px-5 py-3 font-mono">{Math.round(r.lifetimeKwh).toLocaleString()}</td>
+                      <td className="px-5 py-3 font-mono">${r.totalCost.toLocaleString()}</td>
+                      <td className="px-5 py-3 font-black text-slate-900">${r.costPerKwh.toFixed(4)}</td>
+                      <td className="px-5 py-3">
+                        {i === 0
+                          ? <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">★ Best</span>
+                          : <span className="text-red-600 font-bold">+{vsBest.toFixed(1)}% more expensive</span>
+                        }
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Formula explainer */}
+      <div className="p-5 bg-slate-800 text-white rounded-xl text-sm space-y-3">
+        <h4 className="font-bold text-white flex items-center gap-2"><Info className="w-4 h-4 text-rose-400" /> How LCOS is calculated</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-slate-300 text-xs font-mono">
+          <div className="bg-slate-700 rounded-lg p-3">
+            <p className="text-white font-bold mb-1">Step 1 — Avg Capacity</p>
+            <p>(Start 100% + EOL %) ÷ 2</p>
+            <p className="text-rose-400 mt-1">e.g. (100% + 70%) ÷ 2 = 85%</p>
+            <p>→ 16 kWh × 85% = 13.6 kWh/cycle</p>
+          </div>
+          <div className="bg-slate-700 rounded-lg p-3">
+            <p className="text-white font-bold mb-1">Step 2 — Lifetime Energy</p>
+            <p>Avg kWh/cycle × Total cycles</p>
+            <p className="text-rose-400 mt-1">e.g. 13.6 × 8,000 = 108,800 kWh</p>
+            <p>→ Total energy delivered over life</p>
+          </div>
+          <div className="bg-slate-700 rounded-lg p-3">
+            <p className="text-white font-bold mb-1">Step 3 — Cost per kWh</p>
+            <p>Total Cost ÷ Lifetime Energy</p>
+            <p className="text-rose-400 mt-1">e.g. $500,000 ÷ 108,800</p>
+            <p>→ <strong className="text-white">$4.596 / kWh</strong></p>
           </div>
         </div>
       </div>

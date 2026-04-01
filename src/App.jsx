@@ -205,6 +205,8 @@ function ROICalculatorView({ setToast }) {
       { id: 1, name: 'Partner A', capexShare: 100, profitShare: 100, monthlyCost: 0, active: true },
       { id: 2, name: 'Partner B', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
       { id: 3, name: 'Partner C', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
+      { id: 4, name: 'Partner D', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
+      { id: 5, name: 'Partner E', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
     ]
   };
 
@@ -507,7 +509,7 @@ function ROICalculatorView({ setToast }) {
 
     return (
       <div className="space-y-6 animate-fade-in print:hidden">
-        <SectionHeader title="Step 3: Partnership Structure" subtitle="Define up to 3 parties for Joint Venture modeling." icon={Users} />
+        <SectionHeader title="Step 3: Partnership Structure" subtitle="Define up to 5 parties for Joint Venture modeling." icon={Users} />
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800">Enable Joint Venture / Partnership Mode</h3>

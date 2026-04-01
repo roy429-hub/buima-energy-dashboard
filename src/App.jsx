@@ -4,7 +4,8 @@ import {
   AlertCircle, TrendingUp, Sun, Battery, Settings, Loader2,
   PlugZap, ChevronRight, X, List, BarChart3, Printer, Copy,
   MessageSquare, Users, Sliders, MapPin, Wifi, Globe,
-  DollarSign, RefreshCw, Info
+  DollarSign, RefreshCw, Info, Save, Share2, BookOpen,
+  FolderOpen, Trash2, Link, Download
 } from 'lucide-react';
 import { fetchLocationData } from './locationData.js';
 
@@ -34,6 +35,46 @@ const copyToClipboard = (text) => {
   try { document.execCommand('copy'); } catch {}
   document.body.removeChild(el);
 };
+
+// ─── CURRENCY CONFIG ─────────────────────────────────────────────────────
+const CURRENCIES = [
+  { code: 'USD', symbol: '$',  label: 'USD — US Dollar' },
+  { code: 'NTD', symbol: 'NT$', label: 'NTD — New Taiwan Dollar' },
+  { code: 'EUR', symbol: '€',  label: 'EUR — Euro' },
+  { code: 'JPY', symbol: '¥',  label: 'JPY — Japanese Yen' },
+  { code: 'SGD', symbol: 'S$', label: 'SGD — Singapore Dollar' },
+  { code: 'AUD', symbol: 'A$', label: 'AUD — Australian Dollar' },
+  { code: 'GBP', symbol: '£',  label: 'GBP — British Pound' },
+  { code: 'HKD', symbol: 'HK$', label: 'HKD — Hong Kong Dollar' },
+  { code: 'KRW', symbol: '₩',  label: 'KRW — South Korean Won' },
+  { code: 'CNY', symbol: '¥',  label: 'CNY — Chinese Yuan' },
+  { code: 'INR', symbol: '₹',  label: 'INR — Indian Rupee' },
+  { code: 'AED', symbol: 'AED', label: 'AED — UAE Dirham' },
+];
+const getCurrencySymbol = (code) => CURRENCIES.find(c => c.code === code)?.symbol || code;
+
+// ─── URL SHARE ────────────────────────────────────────────────────────────
+const encodeState = (data) => {
+  try { return btoa(encodeURIComponent(JSON.stringify(data))); } catch { return ''; }
+};
+const decodeState = (str) => {
+  try { return JSON.parse(decodeURIComponent(atob(str))); } catch { return null; }
+};
+const getShareUrl = (formData) => {
+  const hash = encodeState(formData);
+  return `${window.location.origin}${window.location.pathname}#s=${hash}`;
+};
+const loadStateFromUrl = () => {
+  const hash = window.location.hash;
+  const match = hash.match(/[#&]s=([^&]+)/);
+  if (match) { const d = decodeState(match[1]); window.location.hash = ''; return d; }
+  return null;
+};
+
+// ─── SAVED SCENARIOS ─────────────────────────────────────────────────────
+const STORAGE_KEY = 'buima_scenarios';
+const loadScenarios = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; } };
+const saveScenarios = (scenarios) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios)); } catch {} };
 
 // ─── UI PRIMITIVES ───────────────────────────────────────────────────────
 const Card = ({ children, className = '' }) => (
@@ -148,8 +189,11 @@ function ROICalculatorView({ setToast }) {
   const [loading, setLoading] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [dataSource, setDataSource] = useState(null);
+  const [scenarios, setScenarios] = useState(loadScenarios);
+  const [showScenarios, setShowScenarios] = useState(false);
+  const [scenarioName, setScenarioName] = useState('');
 
-  const [formData, setFormData] = useState({
+  const DEFAULT_FORM = {
     location: '', gridPrice: 0.12, chargingFee: 0.45, avgChargeHours: 1,
     chargesPerDay: 5, otherRevenueDaily: 0, otherCostDaily: 0, currency: 'USD',
     bestQty: 1, bestCost: 8000, lifecycle: 8000, pcsKw: 6, pcsCost: 2000,
@@ -162,7 +206,39 @@ function ROICalculatorView({ setToast }) {
       { id: 2, name: 'Partner B', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
       { id: 3, name: 'Partner C', capexShare: 0,   profitShare: 0,   monthlyCost: 0, active: false },
     ]
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const fromUrl = loadStateFromUrl();
+    return fromUrl || DEFAULT_FORM;
   });
+
+  // Scenario helpers
+  const saveScenario = () => {
+    if (!scenarioName.trim()) return;
+    const newScenario = { id: Date.now(), name: scenarioName.trim(), data: formData, savedAt: new Date().toLocaleDateString() };
+    const updated = [...scenarios, newScenario];
+    setScenarios(updated);
+    saveScenarios(updated);
+    setScenarioName('');
+    setToast(`Scenario "${newScenario.name}" saved!`);
+  };
+  const loadScenario = (sc) => {
+    setFormData(sc.data);
+    setShowScenarios(false);
+    setStep(1);
+    setToast(`Loaded: ${sc.name}`);
+  };
+  const deleteScenario = (id) => {
+    const updated = scenarios.filter(s => s.id !== id);
+    setScenarios(updated);
+    saveScenarios(updated);
+  };
+  const handleShare = () => {
+    const url = getShareUrl(formData);
+    copyToClipboard(url);
+    setToast('Share link copied to clipboard!');
+  };
 
   const hi = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
   const hp = (id, field, value) => setFormData(prev => ({
@@ -220,13 +296,67 @@ function ROICalculatorView({ setToast }) {
   // Step 1
   const renderStep1 = () => (
     <div className="space-y-6 animate-fade-in print:hidden">
-      <SectionHeader title="Step 1: Location & Revenue Data" subtitle="Where will the B.E.S.T. system be installed?" icon={Building2} />
+      <div className="flex items-start justify-between gap-4">
+        <SectionHeader title="Step 1: Location & Revenue Data" subtitle="Where will the B.E.S.T. system be installed?" icon={Building2} />
+        <button onClick={() => setShowScenarios(v => !v)}
+          className="flex items-center gap-2 px-4 py-2 border-2 border-rose-200 rounded-lg text-rose-700 font-medium text-sm hover:bg-rose-50 transition-colors flex-shrink-0">
+          <FolderOpen className="w-4 h-4" /> Scenarios {scenarios.length > 0 && <span className="bg-rose-700 text-white text-[10px] px-1.5 py-0.5 rounded-full">{scenarios.length}</span>}
+        </button>
+      </div>
+
+      {/* Scenarios Panel */}
+      {showScenarios && (
+        <Card className="p-5 border-2 border-rose-100 animate-fade-in">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><BookOpen className="w-4 h-4 text-rose-700"/> Saved Scenarios</h3>
+          {scenarios.length === 0 ? (
+            <p className="text-slate-400 text-sm italic">No saved scenarios yet. Fill in the form and save it.</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {scenarios.map(sc => (
+                <div key={sc.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">{sc.name}</p>
+                    <p className="text-xs text-slate-400">{sc.savedAt} · {sc.data.location || 'No location'}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => loadScenario(sc)} className="px-3 py-1 bg-rose-700 text-white text-xs font-bold rounded-lg hover:bg-rose-800">Load</button>
+                    <button onClick={() => deleteScenario(sc.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 pt-3 border-t border-slate-100">
+            <input value={scenarioName} onChange={e => setScenarioName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveScenario()}
+              placeholder="Scenario name (e.g. Taipei Hotel 2025)…"
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300" />
+            <button onClick={saveScenario} disabled={!scenarioName.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-700 hover:bg-rose-800 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg">
+              <Save className="w-4 h-4"/> Save Current
+            </button>
+          </div>
+        </Card>
+      )}
 
       <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
         <Globe className="w-5 h-5 text-rose-700 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-rose-900">
           <span className="font-semibold">No API key needed.</span> Grid prices & EV charging rates are pulled from regional data tables. Solar hours come from <strong>Open-Meteo</strong> (free, real data).
         </div>
+      </div>
+
+      {/* Currency selector */}
+      <div className="flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+        <DollarSign className="w-5 h-5 text-rose-700 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-800 mb-1">Report Currency</p>
+          <select value={formData.currency} onChange={e => hi('currency', e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none bg-white">
+            {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="text-3xl font-black text-rose-700 w-12 text-center">{getCurrencySymbol(formData.currency)}</div>
       </div>
 
       <Card className="p-6">
@@ -428,6 +558,7 @@ function ROICalculatorView({ setToast }) {
   // Step 4 — Report
   const renderStep4 = () => {
     const { currency } = formData;
+    const currSymbol = getCurrencySymbol(currency);
     const outputKw = (formData.bestQty * 28) + formData.pcsKw;
     const effectivePower = Math.min(outputKw, formData.chargerRatingKw);
     // Base energy/session and revenue at 100% capacity (Year 1 start)
@@ -523,7 +654,7 @@ function ROICalculatorView({ setToast }) {
           {/* CAPEX */}
           <div className="bg-slate-800 text-white rounded-xl shadow-sm border border-slate-700 overflow-hidden p-4">
             <p className="text-slate-400 text-xs mb-1 uppercase tracking-wide">Total CAPEX</p>
-            <p className="text-2xl font-bold text-white mb-3">{currency} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <p className="text-2xl font-bold text-white mb-3">{currSymbol} {totalCapex.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
             <div className="border-t border-slate-600 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-400 font-sans font-semibold mb-2 not-italic">Breakdown:</p>
               <p className="flex justify-between text-slate-300"><span>B.E.S.T × {formData.bestQty}</span><span>{(formData.bestQty * formData.bestCost).toLocaleString()}</span></p>
@@ -539,7 +670,7 @@ function ROICalculatorView({ setToast }) {
           {/* Annual Net Profit */}
           <Card className="p-4">
             <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Annual Net Profit</p>
-            <p className="text-2xl font-bold text-rose-700 mb-3">{currency} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <p className="text-2xl font-bold text-rose-700 mb-3">{currSymbol} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
               <p className="flex justify-between text-slate-600"><span>Sessions/day</span><span>{formData.chargesPerDay}</span></p>
@@ -711,11 +842,22 @@ function ROICalculatorView({ setToast }) {
               </div>
             </Card>
 
-            <div className="flex gap-3 print:hidden">
-              <button onClick={() => setStep(1)} className="flex-1 py-3 border border-slate-300 rounded-lg text-slate-600 font-medium hover:bg-slate-50">New Calc</button>
-              <button onClick={handlePrint} className="flex-1 py-3 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-900 flex items-center justify-center gap-2">
-                <Printer className="w-4 h-4" /> PDF / Print
-              </button>
+            <div className="space-y-2 print:hidden">
+              <div className="flex gap-2">
+                <button onClick={() => setStep(1)} className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-600 font-medium hover:bg-slate-50 text-sm">New Calc</button>
+                <button onClick={handlePrint} className="flex-1 py-2.5 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-900 flex items-center justify-center gap-2 text-sm">
+                  <Printer className="w-4 h-4" /> PDF / Print
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleShare} className="flex-1 py-2.5 border-2 border-rose-200 text-rose-700 rounded-lg font-medium hover:bg-rose-50 flex items-center justify-center gap-2 text-sm">
+                  <Link className="w-4 h-4" /> Copy Share Link
+                </button>
+                <button onClick={() => { setShowScenarios(true); setStep(1); }}
+                  className="flex-1 py-2.5 border-2 border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50 flex items-center justify-center gap-2 text-sm">
+                  <Save className="w-4 h-4" /> Save Scenario
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1078,11 +1220,29 @@ function LCOSComparison() {
   });
 
   const [systems, setSystems] = useState([
-    { ...emptySystem(1), name: 'B.E.S.T (8k cycles)',  lifecycleCycles: 8000,  eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
-    { ...emptySystem(2), name: 'B.E.S.T (10k cycles)', lifecycleCycles: 10000, eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
-    { ...emptySystem(3), name: 'Competitor A',          lifecycleCycles: 6000,  eolRetention: 80, capacityKwh: 20, totalCost: 450000, active: false },
-    { ...emptySystem(4), name: 'Competitor B',          lifecycleCycles: 5000,  eolRetention: 75, capacityKwh: 24, totalCost: 380000, active: false },
+    { ...emptySystem(1), name: '', lifecycleCycles: 8000,  eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
+    { ...emptySystem(2), name: '', lifecycleCycles: 10000, eolRetention: 70, capacityKwh: 16, totalCost: 500000 },
+    { ...emptySystem(3), name: '', lifecycleCycles: 6000,  eolRetention: 80, capacityKwh: 20, totalCost: 450000, active: false },
+    { ...emptySystem(4), name: '', lifecycleCycles: 5000,  eolRetention: 75, capacityKwh: 24, totalCost: 380000, active: false },
   ]);
+
+  const handleLcosPrint = () => {
+    const el = document.getElementById('lcos-printable');
+    if (!el) return;
+    const win = window.open('', '', 'width=1000,height=800');
+    if (!win) { alert('Pop-up blocked — please allow pop-ups.'); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>LCOS Comparison Report</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <style>body{padding:40px;font-family:sans-serif;color:#1e293b}@media print{.no-print{display:none}}</style>
+      </head><body>
+      <div style="border-bottom:3px solid #be123c;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center">
+        <div><h1 style="font-size:22px;font-weight:900;margin:0">BUIMA <span style="color:#be123c">ENERGY</span></h1>
+        <p style="margin:4px 0 0;color:#64748b;font-size:13px">Battery LCOS Comparison Report — ${new Date().toLocaleDateString()}</p></div>
+      </div>
+      ${el.innerHTML}
+      <script>setTimeout(()=>window.print(),800)</script></body></html>`);
+    win.document.close();
+  };
 
   const updateSystem = (id, field, value) =>
     setSystems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
@@ -1113,15 +1273,22 @@ function LCOSComparison() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 mb-1">
-          <Battery className="w-7 h-7 text-rose-700" /> Battery LCOS Comparison
-        </h1>
-        <p className="text-slate-500 text-sm">
-          Levelized Cost of Storage — how much does each kWh delivered over the battery's lifetime actually cost?
-          Formula: <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs">Cost ÷ (Capacity × avg_retention × Cycles)</span>
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 mb-1">
+            <Battery className="w-7 h-7 text-rose-700" /> Battery LCOS Comparison
+          </h1>
+          <p className="text-slate-500 text-sm">
+            Levelized Cost of Storage — how much does each kWh delivered over the battery's lifetime actually cost?
+            Formula: <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs">Cost ÷ (Capacity × avg_retention × Cycles)</span>
+          </p>
+        </div>
+        <button onClick={handleLcosPrint}
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-medium text-sm rounded-lg flex-shrink-0">
+          <Download className="w-4 h-4" /> Export PDF
+        </button>
       </div>
+      <div id="lcos-printable">
 
       {/* System Config Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1132,8 +1299,8 @@ function LCOSComparison() {
               <input
                 value={s.name}
                 onChange={e => updateSystem(s.id, 'name', e.target.value)}
-                className={`text-sm font-bold bg-transparent border-none outline-none w-full ${s.active ? TEXT[idx] : 'text-slate-400'}`}
-                placeholder={`System ${s.id}`}
+                className={`text-sm font-bold bg-transparent border-b border-dashed outline-none w-full ${s.active ? `${TEXT[idx]} border-current` : 'text-slate-400 border-slate-300'}`}
+                placeholder={`Click to name system ${s.id}…`}
               />
               <button onClick={() => toggleSystem(s.id)}
                 className={`w-10 h-5 rounded-full flex-shrink-0 ml-2 relative transition-colors ${s.active ? COLORS[idx] : 'bg-slate-300'}`}>
@@ -1279,6 +1446,8 @@ function LCOSComparison() {
           </div>
         </Card>
       )}
+
+      </div>{/* end lcos-printable */}
 
       {/* Formula explainer */}
       <div className="p-5 bg-slate-800 text-white rounded-xl text-sm space-y-3">

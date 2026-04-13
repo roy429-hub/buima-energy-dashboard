@@ -643,7 +643,7 @@ function ROICalculatorView({ setToast }) {
     const irrValue    = calculateIRR(cashFlows);
     const roiYears    = avgAnnualProfit > 0 ? totalCapex / avgAnnualProfit : 0;
     const roiPercent  = (cumulative / totalCapex) * 100;
-    const replacementsIn10y   = Math.floor(10 / replacementInterval);
+    const replacementsIn10y   = tableData.filter(r => r.isReplacement).length;
     const totalReplacement10y = replacementCost * replacementsIn10y;
 
     return (

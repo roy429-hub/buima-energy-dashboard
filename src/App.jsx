@@ -606,6 +606,9 @@ function ROICalculatorView({ setToast }) {
     const tableData  = [];
     let cumulative   = -totalCapex;
 
+    let potentialReplacementCost = 0;
+    let potentialReplacementYears = [];
+
     for (let i = 1; i <= 10; i++) {
       const capFactor       = getCapFactor(i);
       // Revenue scales fully with capacity
@@ -614,16 +617,21 @@ function ROICalculatorView({ setToast }) {
       const scaledGridOpEx  = (dailyGridCost * 365) * capFactor;
       const yearOpEx        = scaledGridOpEx + (dailyOtherCost * 365);
       const isReplacement   = (i % replacementInterval === 0);
+      const hideReplacement = isReplacement && i >= 8;
       let salvage = 0;
       let flow = yearRevenue - yearOpEx;
-      if (isReplacement) {
+      if (isReplacement && !hideReplacement) {
         flow -= replacementCost;
         if (i === 10) { salvage = replacementCost * 0.9; flow += salvage; }
       }
+      if (hideReplacement) {
+        potentialReplacementCost += replacementCost;
+        potentialReplacementYears.push(i);
+      }
       cashFlows.push(flow);
       cumulative += flow;
-      tableData.push({ year: i, revenue: yearRevenue, expense: yearOpEx + (isReplacement ? replacementCost : 0),
-        salvage, net: flow, cumulative, isReplacement, capFactor });
+      tableData.push({ year: i, revenue: yearRevenue, expense: yearOpEx + (isReplacement && !hideReplacement ? replacementCost : 0),
+        salvage, net: flow, cumulative, isReplacement: isReplacement && !hideReplacement, capFactor });
     }
 
     // For KPI cards use Year-1 values (full capacity) as the "headline" figure
@@ -810,6 +818,11 @@ function ROICalculatorView({ setToast }) {
                 </table>
               </div>
             </Card>
+            {potentialReplacementCost > 0 && (
+              <p className="text-xs text-slate-500 mt-2 px-2 italic">
+                Potential Battery Replacement Cost (Year {potentialReplacementYears.join(', ')}): {currSymbol} {Math.round(potentialReplacementCost).toLocaleString()}
+              </p>
+            )}
           </div>
 
           <div className="space-y-6">

@@ -593,9 +593,14 @@ function ROICalculatorView({ setToast }) {
     const replacementCost = (formData.bestQty * formData.bestCost) * 0.70;
 
     // Get capacity factor for a given year, accounting for prior replacements
+    // Only replacements before year 8 are honored; after that battery keeps degrading
     const getCapFactor = (yearN) => {
       if (!degradationOn) return 1;
-      const yearsIntoCurrentBattery = ((yearN - 1) % replacementInterval) + 1;
+      let lastReset = 0;
+      for (let y = replacementInterval; y < yearN; y += replacementInterval) {
+        if (y < 8) lastReset = y;
+      }
+      const yearsIntoCurrentBattery = yearN - lastReset;
       const cyclesMidYear = (yearsIntoCurrentBattery - 0.5) * cyclesPerYear;
       const rawFactor = 1 - (cyclesMidYear / formData.lifecycle) * drop;
       return Math.max(eolFraction, Math.min(1, rawFactor));

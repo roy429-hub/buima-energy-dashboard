@@ -603,7 +603,11 @@ function ROICalculatorView({ setToast }) {
       const yearsIntoCurrentBattery = yearN - lastReset;
       const cyclesMidYear = (yearsIntoCurrentBattery - 0.5) * cyclesPerYear;
       const rawFactor = 1 - (cyclesMidYear / formData.lifecycle) * drop;
-      return Math.max(eolFraction, Math.min(1, rawFactor));
+      // Check if we're past a replacement that should have happened (year >= 8 hidden)
+      // If so, allow capacity to degrade below eolFraction since battery wasn't replaced
+      const wouldHaveReplaced = yearN >= 8 && (yearN - lastReset) > replacementInterval;
+      const floor = wouldHaveReplaced ? 0 : eolFraction;
+      return Math.max(floor, Math.min(1, rawFactor));
     };
 
     const cashFlows  = [-( (formData.bestQty * formData.bestCost) + formData.pcsCost + formData.evChargerCost + formData.pvCost + (formData.standRequired ? formData.standCost : 0) + formData.laborCost )];

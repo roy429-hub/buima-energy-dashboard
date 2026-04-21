@@ -140,6 +140,30 @@ const DataBadge = ({ source }) => (
 // ─── MAIN APP ────────────────────────────────────────────────────────────
 export default function App() {
   const [activeTab, setActiveTab] = useState('roi');
+  const [lang, setLang] = useState('en');
+
+  const toggleLanguage = () => {
+    const newLang = lang === 'en' ? 'ja' : 'en';
+    setLang(newLang);
+    // Trigger Google Translate
+    const select = document.querySelector('.goog-te-combo');
+    if (select) {
+      select.value = newLang === 'ja' ? 'ja' : 'en';
+      select.dispatchEvent(new Event('change'));
+    }
+    if (newLang === 'en') {
+      // Reset to original language
+      const frame = document.querySelector('.goog-te-banner-frame');
+      if (frame) {
+        const btn = frame.contentDocument.querySelector('.goog-close-link');
+        if (btn) btn.click();
+      }
+      // Fallback: remove Google Translate cookie and reload
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + window.location.hostname;
+      if (select) { select.value = 'en'; select.dispatchEvent(new Event('change')); }
+    }
+  };
   const [toastMsg, setToastMsg] = useState(null);
 
   return (
@@ -159,18 +183,26 @@ export default function App() {
               <Globe className="w-3 h-3 mr-0.5" />No API Key Required
             </span>
           </div>
-          <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-            {[
-              { id: 'roi', label: 'ROI Calc' },
-              { id: 'modeler', label: 'Compare ROI' },
-              { id: 'lcos', label: 'LCOS' },
-            ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-700 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-rose-700'}`}>
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-2">
+            <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+              {[
+                { id: 'roi', label: 'ROI Calc' },
+                { id: 'modeler', label: 'Compare ROI' },
+                { id: 'lcos', label: 'LCOS' },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-700 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-rose-700'}`}>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            <button onClick={toggleLanguage}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700 transition-all shadow-sm"
+              title={lang === 'en' ? 'Switch to Japanese' : 'Switch to English'}>
+              <Globe className="w-4 h-4 text-slate-500" />
+              <span className="font-bold">{lang === 'en' ? 'JP' : 'EN'}</span>
+            </button>
+          </div>
         </div>
       </header>
 

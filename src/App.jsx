@@ -186,9 +186,10 @@ export default function App() {
           <div className="flex items-center gap-2">
             <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg">
               {[
-                { id: 'roi', label: 'ROI Calc' },
+                { id: 'roi',     label: 'EV ROI' },
+                { id: 'ps',      label: 'PS ROI' },
                 { id: 'modeler', label: 'Compare ROI' },
-                { id: 'lcos', label: 'LCOS' },
+                { id: 'lcos',    label: 'LCOS' },
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-700 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-rose-700'}`}>
@@ -208,6 +209,7 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:max-w-none">
         {activeTab === 'roi'     && <ROICalculatorView setToast={setToastMsg} />}
+        {activeTab === 'ps'      && <PeakShavingROIView setToast={setToastMsg} />}
         {activeTab === 'modeler' && <InteractiveChargingROI />}
         {activeTab === 'lcos'    && <LCOSComparison />}
       </main>
@@ -1529,6 +1531,385 @@ function LCOSComparison() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+// PEAK SHAVING + GREEN ENERGY ROI CALCULATOR ("PS ROI")
+// ═════════════════════════════════════════════════════════════════════════
+
+function PeakShavingROIView({ setToast }) {
+  const [formData, setFormData] = useState({
+    currency: 'NTD',
+    // Investment
+    capex: 1500000,
+    opexAnnual: 30000,
+    // Battery system
+    batteryKwh: 64,           // total usable battery capacity
+    roundTripEff: 90,         // % round-trip efficiency
+    cyclesPerDay: 1,          // how many full cycles per day (peak shaving)
+    lifecycle: 8000,          // total battery cycles
+    eolRetention: 70,         // % at EOL
+    // Green energy (PV)
+    pvKw: 30,                 // PV nameplate
+    sunHours: 4,              // peak sun hours / day
+    pvEfficiency: 80,         // %
+    pvDailyKwh: 0,            // OR direct input (overrides above if > 0)
+    pvSelfConsumption: 90,    // % of PV used on-site (rest exported at off-peak rate)
+    pvExportRate: 0,          // feed-in rate (per kWh) when exporting
+    // Grid tariffs
+    peakRate: 7.0,            // cost per kWh during peak
+    offPeakRate: 2.0,         // cost per kWh during off-peak
+    peakHours: 4,             // peak hours per day (for context only)
+    // Daily load
+    dailyLoadKwh: 100,        // total facility load per day (used to cap peak shaving)
+    peakLoadShare: 40,        // % of daily load that falls during peak window
+    // Projection
+    projectionYears: 10,
+  });
+
+  const hi = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
+  const currency = formData.currency;
+  const sym = getCurrencySymbol(currency);
+
+  // ── PV / green energy daily generation ───────────────────────────────
+  const pvDailyFromSpec = formData.pvKw * formData.sunHours * (formData.pvEfficiency / 100);
+  const pvDaily = formData.pvDailyKwh > 0 ? formData.pvDailyKwh : pvDailyFromSpec;
+  const pvSelfKwh   = pvDaily * (formData.pvSelfConsumption / 100);
+  const pvExportKwh = pvDaily - pvSelfKwh;
+
+  // ── Peak shaving — energy that gets shifted from off-peak to peak ────
+  const peakLoadKwh = formData.dailyLoadKwh * (formData.peakLoadShare / 100);
+  // Battery shifts up to its capacity per cycle, but no more than the peak load
+  const peakShiftKwh = Math.min(
+    formData.batteryKwh * formData.cyclesPerDay,
+    peakLoadKwh
+  );
+  // Savings per kWh shifted = (peak − off-peak) × round-trip efficiency
+  const peakShaveSavingsPerKwh = (formData.peakRate - formData.offPeakRate) * (formData.roundTripEff / 100);
+  const dailyPeakShaveSavings = peakShiftKwh * peakShaveSavingsPerKwh;
+
+  // ── Green energy savings ─────────────────────────────────────────────
+  // PV self-consumed displaces grid energy. Assume it displaces peak first
+  // (highest value), then off-peak.
+  const pvDisplacePeak    = Math.min(pvSelfKwh, peakLoadKwh);
+  const pvDisplaceOffPeak = Math.max(0, pvSelfKwh - peakLoadKwh);
+  const dailyPvSavings  = pvDisplacePeak * formData.peakRate + pvDisplaceOffPeak * formData.offPeakRate;
+  const dailyExportRev  = pvExportKwh * formData.pvExportRate;
+
+  // ── Totals ───────────────────────────────────────────────────────────
+  const dailyTotalSavings  = dailyPeakShaveSavings + dailyPvSavings + dailyExportRev;
+  const annualGrossSavings = dailyTotalSavings * 365;
+  const annualNetProfit    = annualGrossSavings - formData.opexAnnual;
+
+  // ROI / payback
+  const paybackYears = annualNetProfit > 0 ? formData.capex / annualNetProfit : null;
+  const annualRoi    = formData.capex > 0 ? (annualNetProfit / formData.capex) * 100 : 0;
+
+  // ── Battery degradation cash flow (mirrors EV ROI model) ─────────────
+  const drop = 1 - (formData.eolRetention / 100);
+  const cyclesPerYear = formData.cyclesPerDay * 365;
+  const replacementInterval = formData.cyclesPerDay > 0
+    ? Math.ceil(formData.lifecycle / cyclesPerYear)
+    : 999;
+  const replacementCost = formData.capex * 0.45; // assume battery is ~45% of CAPEX
+
+  const getCapFactor = (yearN) => {
+    const yearsIntoCurrentBattery = ((yearN - 1) % replacementInterval) + 1;
+    const cyclesMidYear = (yearsIntoCurrentBattery - 0.5) * cyclesPerYear;
+    const raw = 1 - (cyclesMidYear / formData.lifecycle) * drop;
+    return Math.max(formData.eolRetention / 100, Math.min(1, raw));
+  };
+
+  const cashFlows = [-formData.capex];
+  const tableRows = [];
+  let cumulative = -formData.capex;
+  for (let i = 1; i <= formData.projectionYears; i++) {
+    const cap = getCapFactor(i);
+    const yearSavings = annualGrossSavings * cap;       // scaled by capacity
+    const yearOpex    = formData.opexAnnual;
+    let flow = yearSavings - yearOpex;
+    let replacement = 0;
+    const isReplacement = i % replacementInterval === 0 && i < formData.projectionYears;
+    if (isReplacement) {
+      replacement = replacementCost;
+      flow -= replacement;
+    }
+    cashFlows.push(flow);
+    cumulative += flow;
+    tableRows.push({
+      year: i, capFactor: cap, savings: yearSavings, opex: yearOpex,
+      replacement, net: flow, cumulative, isReplacement,
+    });
+  }
+  const irr = calculateIRR(cashFlows);
+  const cumulativeRoi = formData.capex > 0 ? (cumulative / formData.capex) * 100 : 0;
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* HEADER */}
+      <div>
+        <SectionHeader title="PS ROI — Peak Shaving + Green Energy" icon={Sun}
+          subtitle="Calculate ROI from grid arbitrage (peak/off-peak) and solar self-consumption" />
+      </div>
+
+      {/* INVESTMENT */}
+      <Card className="p-6">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <DollarSign className="w-5 h-5 text-rose-700" /> Investment
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+            <select value={formData.currency} onChange={e => hi('currency', e.target.value)}
+              className="w-full rounded-md border-slate-300 py-2 px-3 focus:border-rose-700 focus:ring-rose-700 sm:text-sm border">
+              {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+            </select>
+          </div>
+          <InputField label="CAPEX (Total Setup Cost)" value={formData.capex}
+            onChange={e => hi('capex', parseFloat(e.target.value) || 0)}
+            type="number" suffix={currency} note="One-time investment in the B.E.S.T + PCS + PV system." />
+          <InputField label="OPEX (Annual Operating Cost)" value={formData.opexAnnual}
+            onChange={e => hi('opexAnnual', parseFloat(e.target.value) || 0)}
+            type="number" suffix={`${currency}/yr`} note="Maintenance, insurance, monitoring, etc." />
+        </div>
+      </Card>
+
+      {/* GREEN ENERGY */}
+      <Card className="p-6">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <Sun className="w-5 h-5 text-amber-500" /> Green Energy (Solar PV)
+        </h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Fill EITHER the PV system spec (kW × sun hours × efficiency) OR enter a measured daily kWh directly.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <InputField label="PV Nameplate" value={formData.pvKw}
+            onChange={e => hi('pvKw', parseFloat(e.target.value) || 0)}
+            type="number" suffix="kW" />
+          <InputField label="Peak Sun Hours" value={formData.sunHours}
+            onChange={e => hi('sunHours', parseFloat(e.target.value) || 0)}
+            type="number" suffix="hrs/day" note="Typically 3–6 depending on region" />
+          <InputField label="PV System Efficiency" value={formData.pvEfficiency}
+            onChange={e => hi('pvEfficiency', parseFloat(e.target.value) || 0)}
+            type="number" suffix="%" note="After cabling, inverter, soiling losses" />
+          <InputField label="OR — Measured Daily kWh" value={formData.pvDailyKwh}
+            onChange={e => hi('pvDailyKwh', parseFloat(e.target.value) || 0)}
+            type="number" suffix="kWh/day" note="Overrides spec calculation if > 0" />
+          <InputField label="PV Self-Consumption" value={formData.pvSelfConsumption}
+            onChange={e => hi('pvSelfConsumption', parseFloat(e.target.value) || 0)}
+            type="number" suffix="%" note="% used on-site (rest exported)" />
+          <InputField label="Export / Feed-in Rate" value={formData.pvExportRate}
+            onChange={e => hi('pvExportRate', parseFloat(e.target.value) || 0)}
+            type="number" suffix={`${currency}/kWh`} note="0 if no feed-in tariff" />
+        </div>
+        <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm">
+          <strong className="text-amber-900">PV daily generation:</strong>{' '}
+          <span className="font-mono font-bold text-amber-900">{pvDaily.toFixed(1)} kWh</span>
+          <span className="text-slate-600">
+            {' '}({pvSelfKwh.toFixed(1)} self-consumed, {pvExportKwh.toFixed(1)} exported)
+          </span>
+        </div>
+      </Card>
+
+      {/* PEAK SHAVING */}
+      <Card className="p-6">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <Zap className="w-5 h-5 text-rose-700" /> Peak Shaving — Grid Tariff
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <InputField label="Peak Rate" value={formData.peakRate}
+            onChange={e => hi('peakRate', parseFloat(e.target.value) || 0)}
+            type="number" suffix={`${currency}/kWh`} note="Grid price during peak hours" />
+          <InputField label="Off-Peak Rate" value={formData.offPeakRate}
+            onChange={e => hi('offPeakRate', parseFloat(e.target.value) || 0)}
+            type="number" suffix={`${currency}/kWh`} note="Grid price during off-peak / overnight" />
+          <InputField label="Peak Hours / Day" value={formData.peakHours}
+            onChange={e => hi('peakHours', parseFloat(e.target.value) || 0)}
+            type="number" suffix="hrs" note="e.g. 4 hrs (18:00–22:00)" />
+          <InputField label="Battery Usable Capacity" value={formData.batteryKwh}
+            onChange={e => hi('batteryKwh', parseFloat(e.target.value) || 0)}
+            type="number" suffix="kWh" note="Total usable storage" />
+          <InputField label="Cycles per Day" value={formData.cyclesPerDay}
+            onChange={e => hi('cyclesPerDay', parseFloat(e.target.value) || 0)}
+            type="number" suffix="cyc/day" note="Usually 1 (one charge/discharge per day)" />
+          <InputField label="Round-Trip Efficiency" value={formData.roundTripEff}
+            onChange={e => hi('roundTripEff', parseFloat(e.target.value) || 0)}
+            type="number" suffix="%" note="Energy out ÷ Energy in" />
+        </div>
+        <div className="mt-4 p-3 bg-rose-50 rounded-lg border border-rose-200 text-sm">
+          <strong className="text-rose-900">Tariff spread:</strong>{' '}
+          <span className="font-mono font-bold text-rose-900">{sym}{(formData.peakRate - formData.offPeakRate).toFixed(2)}/kWh</span>
+          <span className="text-slate-600">
+            {' '}(peak {sym}{formData.peakRate} − off-peak {sym}{formData.offPeakRate})
+          </span>
+        </div>
+      </Card>
+
+      {/* LOAD */}
+      <Card className="p-6">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <PlugZap className="w-5 h-5 text-rose-700" /> Daily Facility Load
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <InputField label="Daily Energy Use" value={formData.dailyLoadKwh}
+            onChange={e => hi('dailyLoadKwh', parseFloat(e.target.value) || 0)}
+            type="number" suffix="kWh/day" note="Total facility consumption" />
+          <InputField label="Peak-Window Load Share" value={formData.peakLoadShare}
+            onChange={e => hi('peakLoadShare', parseFloat(e.target.value) || 0)}
+            type="number" suffix="%" note="% of daily load that falls during peak hours" />
+          <InputField label="Battery Lifecycle" value={formData.lifecycle}
+            onChange={e => hi('lifecycle', parseFloat(e.target.value) || 0)}
+            type="number" suffix="cycles" note="Total cycles before EOL" />
+          <InputField label="EOL Retention" value={formData.eolRetention}
+            onChange={e => hi('eolRetention', parseFloat(e.target.value) || 0)}
+            type="number" suffix="%" note="% capacity at end of life" />
+          <InputField label="Projection Period" value={formData.projectionYears}
+            onChange={e => hi('projectionYears', parseInt(e.target.value) || 10)}
+            type="number" suffix="years" />
+        </div>
+      </Card>
+
+      {/* RESULTS — KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Daily Savings */}
+        <Card className="p-4">
+          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Daily Savings</p>
+          <p className="text-2xl font-bold text-rose-700 mb-3">{sym} {dailyTotalSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+            <p className="flex justify-between text-slate-600"><span>Peak shaving</span><span>{sym}{dailyPeakShaveSavings.toFixed(0)}</span></p>
+            <p className="flex justify-between text-slate-600"><span>PV self-use</span><span>{sym}{dailyPvSavings.toFixed(0)}</span></p>
+            <p className="flex justify-between text-slate-600"><span>PV export</span><span>{sym}{dailyExportRev.toFixed(0)}</span></p>
+            <p className="flex justify-between text-rose-700 font-bold border-t border-slate-100 pt-1 mt-1"><span>Total/day</span><span>{sym}{dailyTotalSavings.toFixed(0)}</span></p>
+          </div>
+        </Card>
+
+        {/* Annual Net Profit */}
+        <Card className="p-4">
+          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Annual Net Profit</p>
+          <p className="text-2xl font-bold text-rose-700 mb-3">{sym} {annualNetProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+            <p className="flex justify-between text-slate-600"><span>Gross savings/yr</span><span>{sym}{annualGrossSavings.toFixed(0)}</span></p>
+            <p className="flex justify-between text-red-500"><span>− Annual OPEX</span><span>{sym}{formData.opexAnnual.toFixed(0)}</span></p>
+            <p className="flex justify-between text-rose-800 font-bold border-t border-slate-100 pt-1 mt-1"><span>= Net/yr</span><span>{sym}{annualNetProfit.toFixed(0)}</span></p>
+          </div>
+        </Card>
+
+        {/* Payback / Annual ROI */}
+        <Card className="p-4">
+          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Payback Period</p>
+          <p className="text-2xl font-bold text-slate-700 mb-1">
+            {paybackYears != null && paybackYears < 100 ? paybackYears.toFixed(1) : '—'}
+            <span className="text-sm font-normal text-slate-500"> yrs</span>
+          </p>
+          <p className="text-sm font-bold text-slate-500 mb-3">
+            Annual ROI: <span className="text-rose-700">{annualRoi.toFixed(1)}%</span>
+          </p>
+          <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+            <p className="flex justify-between text-slate-600"><span>CAPEX</span><span>{sym}{formData.capex.toFixed(0)}</span></p>
+            <p className="flex justify-between text-slate-600"><span>÷ Net/yr</span><span>{sym}{annualNetProfit.toFixed(0)}</span></p>
+            <p className="flex justify-between text-slate-700 font-bold border-t border-slate-100 pt-1"><span>= Payback</span><span>{paybackYears != null && paybackYears < 100 ? `${paybackYears.toFixed(1)} yrs` : '—'}</span></p>
+          </div>
+        </Card>
+
+        {/* IRR / Cumulative ROI */}
+        <Card className="p-4">
+          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">{formData.projectionYears}y IRR</p>
+          <p className={`text-2xl font-bold mb-1 ${irr > 0 ? 'text-indigo-600' : 'text-red-500'}`}>{irr ? `${irr.toFixed(1)}%` : 'N/A'}</p>
+          <p className="text-sm font-bold text-slate-500 mb-3">
+            {formData.projectionYears}y Cumulative ROI: <span className={cumulativeRoi >= 0 ? 'text-rose-700' : 'text-red-500'}>{cumulativeRoi.toFixed(1)}%</span>
+          </p>
+          <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
+            <p className="flex justify-between text-slate-600"><span>Year 0</span><span className="text-red-500">−{sym}{formData.capex.toFixed(0)}</span></p>
+            <p className="flex justify-between text-slate-600"><span>Yrs 1–{formData.projectionYears}</span><span className="text-rose-700">~+{sym}{annualNetProfit.toFixed(0)}/yr</span></p>
+            <p className="flex justify-between text-indigo-700 font-bold border-t border-slate-100 pt-1"><span>= IRR</span><span>{irr ? `${irr.toFixed(1)}%` : 'N/A'}</span></p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Cash Flow Table */}
+      <Card className="overflow-hidden">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800">{formData.projectionYears}-Year Cash Flow</h3>
+          <BarChart3 className="w-5 h-5 text-slate-400" />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Year</th>
+                <th className="px-4 py-3 text-amber-600">Batt. Cap.</th>
+                <th className="px-4 py-3">Gross Savings</th>
+                <th className="px-4 py-3">OPEX</th>
+                <th className="px-4 py-3">Replacement</th>
+                <th className="px-4 py-3">Net Cash Flow</th>
+                <th className="px-4 py-3">Cumulative</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {tableRows.map(row => (
+                <tr key={row.year} className={row.isReplacement ? 'bg-red-50' : ''}>
+                  <td className="px-4 py-3 font-medium">Year {row.year}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${row.capFactor >= 0.90 ? 'bg-green-100 text-green-700' : row.capFactor >= 0.80 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                      {(row.capFactor * 100).toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-rose-700">+{Math.round(row.savings).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-red-500">−{Math.round(row.opex).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-amber-700">
+                    {row.replacement > 0 ? `−${Math.round(row.replacement).toLocaleString()}` : '—'}
+                  </td>
+                  <td className={`px-4 py-3 font-bold ${row.net >= 0 ? 'text-slate-800' : 'text-red-500'}`}>
+                    {Math.round(row.net).toLocaleString()}
+                  </td>
+                  <td className={`px-4 py-3 ${row.cumulative > 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                    {Math.round(row.cumulative).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Methodology */}
+      <Card className="p-6">
+        <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <Info className="w-5 h-5 text-rose-700" /> How it's calculated
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="bg-slate-50 rounded-lg p-4">
+            <p className="font-bold text-slate-800 mb-2">Peak Shaving Savings</p>
+            <p className="text-slate-600 mb-2">Battery charges off-peak, discharges during peak to displace expensive grid.</p>
+            <p className="font-mono text-xs bg-white p-2 rounded border border-slate-200">
+              Daily = min(battery_kWh × cycles/day, peak_load) × (peak − off-peak) × rt_eff
+            </p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-4">
+            <p className="font-bold text-slate-800 mb-2">Green Energy Savings</p>
+            <p className="text-slate-600 mb-2">PV displaces grid power. Self-consumed energy displaces peak first, then off-peak.</p>
+            <p className="font-mono text-xs bg-white p-2 rounded border border-slate-200">
+              Daily = pv_peak × peak_rate + pv_off × off_rate + pv_export × export_rate
+            </p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-4">
+            <p className="font-bold text-slate-800 mb-2">Annual Net Profit</p>
+            <p className="font-mono text-xs bg-white p-2 rounded border border-slate-200">
+              (daily_savings × 365) − annual_opex
+            </p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-4">
+            <p className="font-bold text-slate-800 mb-2">Payback / ROI</p>
+            <p className="font-mono text-xs bg-white p-2 rounded border border-slate-200">
+              Payback = CAPEX ÷ net_annual_profit<br/>
+              Annual ROI = net_annual_profit ÷ CAPEX × 100%
+            </p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -234,6 +234,9 @@ function ROICalculatorView({ setToast }) {
     evChargerCost: 1500, pvKw: 0, pvCost: 0, pvEfficiency: 85,
     standRequired: true, standCost: 1000, laborCost: 2000,
     sunHours: 3.5, chargerRatingKw: 11,
+    // Annual inflation toggles (applied year-over-year in the 10-year cash flow)
+    chargingFeeInflationEnabled: false, chargingFeeInflationPct: 3.0,
+    gridPriceInflationEnabled:  false, gridPriceInflationPct:  3.0,
     jvEnabled: false,
     parties: [
       { id: 1, name: 'Partner A', capexShare: 100, profitShare: 100, monthlyCost: 0, active: true },
@@ -431,8 +434,46 @@ function ROICalculatorView({ setToast }) {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <InputField label="Grid Electricity Cost" value={formData.gridPrice} onChange={e => hi('gridPrice', parseFloat(e.target.value))} type="number" suffix={`${formData.currency}/kWh`} note="Cost to charge battery from grid." />
-        <InputField label="EV Charging Fee (Revenue)" value={formData.chargingFee} onChange={e => hi('chargingFee', parseFloat(e.target.value))} type="number" suffix={`${formData.currency}/kWh`} note="Price charged to EV driver." />
+        <div>
+          <InputField label="Grid Electricity Cost" value={formData.gridPrice} onChange={e => hi('gridPrice', parseFloat(e.target.value))} type="number" suffix={`${formData.currency}/kWh`} note="Cost to charge battery from grid." />
+          <div className="flex items-center gap-2 mt-1">
+            <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={formData.gridPriceInflationEnabled}
+                onChange={e => hi('gridPriceInflationEnabled', e.target.checked)}
+                className="w-4 h-4 accent-rose-700" />
+              <span>Annual inflation</span>
+            </label>
+            {formData.gridPriceInflationEnabled && (
+              <div className="flex items-center gap-1 flex-1">
+                <input type="number" value={formData.gridPriceInflationPct}
+                  onChange={e => hi('gridPriceInflationPct', parseFloat(e.target.value) || 0)}
+                  className="w-16 rounded border-slate-300 border py-1 px-2 text-xs focus:border-rose-700 focus:ring-rose-700"
+                  step="0.1" />
+                <span className="text-xs text-slate-500">% / yr</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div>
+          <InputField label="EV Charging Fee (Revenue)" value={formData.chargingFee} onChange={e => hi('chargingFee', parseFloat(e.target.value))} type="number" suffix={`${formData.currency}/kWh`} note="Price charged to EV driver." />
+          <div className="flex items-center gap-2 mt-1">
+            <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={formData.chargingFeeInflationEnabled}
+                onChange={e => hi('chargingFeeInflationEnabled', e.target.checked)}
+                className="w-4 h-4 accent-rose-700" />
+              <span>Annual inflation</span>
+            </label>
+            {formData.chargingFeeInflationEnabled && (
+              <div className="flex items-center gap-1 flex-1">
+                <input type="number" value={formData.chargingFeeInflationPct}
+                  onChange={e => hi('chargingFeeInflationPct', parseFloat(e.target.value) || 0)}
+                  className="w-16 rounded border-slate-300 border py-1 px-2 text-xs focus:border-rose-700 focus:ring-rose-700"
+                  step="0.1" />
+                <span className="text-xs text-slate-500">% / yr</span>
+              </div>
+            )}
+          </div>
+        </div>
         <InputField label="Avg. Charge Time" value={formData.avgChargeHours} onChange={e => hi('avgChargeHours', parseFloat(e.target.value))} type="number" suffix="Hours" note="Destination charging average." />
         <InputField label="Sessions Per Day" value={formData.chargesPerDay} onChange={e => hi('chargesPerDay', parseFloat(e.target.value))} type="number" note="Projected daily utilization." />
         <InputField label="Other Daily Revenue" value={formData.otherRevenueDaily} onChange={e => hi('otherRevenueDaily', parseFloat(e.target.value))} type="number" suffix="Daily" note="e.g. ads, signage." />
@@ -652,12 +693,21 @@ function ROICalculatorView({ setToast }) {
     let potentialReplacementCost = 0;
     let potentialReplacementYears = [];
 
+    // Inflation multipliers — compound year-over-year from Year 1
+    const feeInflOn   = formData.chargingFeeInflationEnabled;
+    const feeInflRate = feeInflOn ? (formData.chargingFeeInflationPct || 0) / 100 : 0;
+    const gridInflOn  = formData.gridPriceInflationEnabled;
+    const gridInflRate = gridInflOn ? (formData.gridPriceInflationPct || 0) / 100 : 0;
+
     for (let i = 1; i <= 10; i++) {
       const capFactor       = getCapFactor(i);
-      // Revenue scales fully with capacity
-      const yearRevenue     = baseAnnualRevenue * capFactor;
-      // Grid OpEx scales with capacity (less energy delivered = less grid draw); fixed other costs unchanged
-      const scaledGridOpEx  = (dailyGridCost * 365) * capFactor;
+      // Inflation compounds from Year 1 (yearsElapsed = i - 1)
+      const feeInflMult  = Math.pow(1 + feeInflRate,  i - 1);
+      const gridInflMult = Math.pow(1 + gridInflRate, i - 1);
+      // Revenue = base × capacity × fee inflation
+      const yearRevenue     = baseAnnualRevenue * capFactor * feeInflMult;
+      // Grid OpEx scales with capacity AND grid-price inflation; fixed other costs unchanged
+      const scaledGridOpEx  = (dailyGridCost * 365) * capFactor * gridInflMult;
       const yearOpEx        = scaledGridOpEx + (dailyOtherCost * 365);
       const isReplacement   = (i % replacementInterval === 0);
       const hideReplacement = isReplacement && i >= 8;
@@ -820,7 +870,16 @@ function ROICalculatorView({ setToast }) {
           <div className="lg:col-span-2">
             <Card className="overflow-hidden">
               <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800">10-Year Project Cash Flow</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-slate-800">10-Year Project Cash Flow</h3>
+                  {(formData.chargingFeeInflationEnabled || formData.gridPriceInflationEnabled) && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      Inflation applied
+                      {formData.chargingFeeInflationEnabled && ` · fee +${formData.chargingFeeInflationPct}%/yr`}
+                      {formData.gridPriceInflationEnabled  && ` · grid +${formData.gridPriceInflationPct}%/yr`}
+                    </span>
+                  )}
+                </div>
                 <BarChart3 className="w-5 h-5 text-slate-400" />
               </div>
               <div className="overflow-x-auto">

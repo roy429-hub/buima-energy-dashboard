@@ -772,7 +772,12 @@ function ROICalculatorView({ setToast }) {
 
           {/* Annual Net Profit */}
           <Card className="p-4">
-            <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Annual Net Profit</p>
+            <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">
+              Annual Net Profit
+              {(formData.chargingFeeInflationEnabled || formData.gridPriceInflationEnabled) && (
+                <span className="ml-1 text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5 normal-case">Yr 1 · pre-inflation</span>
+              )}
+            </p>
             <p className="text-2xl font-bold text-rose-700 mb-3">{currSymbol} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
@@ -793,7 +798,7 @@ function ROICalculatorView({ setToast }) {
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-500 font-sans font-semibold mb-2">Cash flow inputs:</p>
               <p className="flex justify-between text-slate-600"><span>Year 0 (invest)</span><span className="text-red-500">−{Math.round(totalCapex).toLocaleString()}</span></p>
-              <p className="flex justify-between text-slate-600"><span>Yr 1–10 (annual)</span><span className="text-rose-700">+{Math.round(annualProfit).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>Avg Net / Yr (10y)</span><span className="text-rose-700">+{Math.round(avgAnnualProfit).toLocaleString()}</span></p>
               {replacementInterval <= 10 && (
                 <p className="flex justify-between text-slate-600"><span>Yr {replacementInterval} repl.</span><span className="text-amber-600">−{Math.round(replacementCost).toLocaleString()}</span></p>
               )}
@@ -840,12 +845,22 @@ function ROICalculatorView({ setToast }) {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {formData.parties.filter(p => p.active).map(party => {
                     const invest = totalCapex * (party.capexShare / 100);
+                    // Year 1 (base) monthly figure for the 'Monthly Net' column
                     const grossMonthly = (annualProfit / 12) * (party.profitShare / 100);
                     const netMonthly = grossMonthly - party.monthlyCost;
-                    const annualNet = netMonthly * 12;
-                    const payback = invest > 0 ? (annualNet > 0 ? invest / annualNet : 999) : 0;
+                    // 10-year cumulative operating profit — sums INFLATED values across all years.
+                    // (row.expense includes replacementCost on replacement years; strip it back out
+                    //  so it isn't double-counted with replShare below.)
+                    const totalOperatingProfit10y = tableData.reduce((s, r) =>
+                      s + (r.revenue - (r.expense - (r.isReplacement ? replacementCost : 0))), 0);
+                    const partnerGrossOp10y = totalOperatingProfit10y * (party.profitShare / 100);
+                    const partnerFixedOpex10y = party.monthlyCost * 12 * 10;
                     const replShare = totalReplacement10y * (party.capexShare / 100);
-                    const income10y = (annualNet * 10) - replShare;
+                    const income10y = partnerGrossOp10y - partnerFixedOpex10y - replShare;
+                    // Payback uses the AVERAGE annual net across 10y (inflation-aware),
+                    // which is more accurate than Year-1-only when inflation is enabled.
+                    const partnerAvgAnnualNet = income10y / 10;
+                    const payback = invest > 0 ? (partnerAvgAnnualNet > 0 ? invest / partnerAvgAnnualNet : 999) : 0;
                     const roi = invest > 0 ? ((income10y - invest) / invest) * 100 : 999;
                     return (
                       <tr key={party.id}>
@@ -938,13 +953,19 @@ function ROICalculatorView({ setToast }) {
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">Revenue</p>
                   <p className="flex justify-between"><span>Fee:</span><span>{currency} {formData.chargingFee} / kWh</span></p>
                   <p className="flex justify-between"><span>Sessions:</span><span>{formData.chargesPerDay}/day</span></p>
-                  <p className="flex justify-between font-medium text-rose-800 mt-1"><span>Annual:</span><span>{currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
+                  <p className="flex justify-between font-medium text-rose-800 mt-1">
+                    <span>Annual{(formData.chargingFeeInflationEnabled) && <span className="text-[10px] text-amber-700 ml-1">(Yr 1)</span>}:</span>
+                    <span>{currency} {Math.round(annualRevenue).toLocaleString()}</span>
+                  </p>
                 </div>
                 <div className="space-y-1 pt-2">
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">OpEx</p>
                   <p className="flex justify-between"><span>Grid:</span><span>{currency} {formData.gridPrice} / kWh</span></p>
                   <p className="flex justify-between"><span>PV Gen:</span><span>{dailyPvGen.toFixed(1)} kWh/day</span></p>
-                  <p className="flex justify-between font-medium text-red-700 mt-1"><span>Annual:</span><span>{currency} {Math.round(annualOpEx).toLocaleString()}</span></p>
+                  <p className="flex justify-between font-medium text-red-700 mt-1">
+                    <span>Annual{(formData.gridPriceInflationEnabled) && <span className="text-[10px] text-amber-700 ml-1">(Yr 1)</span>}:</span>
+                    <span>{currency} {Math.round(annualOpEx).toLocaleString()}</span>
+                  </p>
                 </div>
                 <div className="space-y-1 pt-2">
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">CAPEX</p>
@@ -1847,7 +1868,12 @@ function PeakShavingROIView({ setToast }) {
 
         {/* Annual Net Profit */}
         <Card className="p-4">
-          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Annual Net Profit</p>
+          <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">
+              Annual Net Profit
+              {(formData.chargingFeeInflationEnabled || formData.gridPriceInflationEnabled) && (
+                <span className="ml-1 text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5 normal-case">Yr 1 · pre-inflation</span>
+              )}
+            </p>
           <p className="text-2xl font-bold text-rose-700 mb-3">{sym} {annualNetProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
           <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
             <p className="flex justify-between text-slate-600"><span>Gross savings/yr</span><span>{sym}{annualGrossSavings.toFixed(0)}</span></p>

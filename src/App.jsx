@@ -36,6 +36,60 @@ const copyToClipboard = (text) => {
   document.body.removeChild(el);
 };
 
+// ─── B.E.S.T. POWER (per set) ────────────────────────────────────────────
+// Each set has a 16 kWh battery operating at 1C: it discharges and recharges at
+// no more than 16 kW (16 kWh per hour). On top of that comes a grid input
+// (standard 12 kW, adjustable). After the battery is depleted, only the grid
+// part remains.
+const BEST_BATT_KWH = 16;
+const BEST_C_RATE   = 1;                             // 1C charge and discharge
+const BEST_BATT_KW  = BEST_BATT_KWH * BEST_C_RATE;   // 16 kW per set
+const BEST_GRID_KW  = 12;   // standard grid input per set; default for the adjustable field
+
+// Split one charging session into a grid+battery phase and a grid-only phase.
+// Grid supplies first (up to sets x grid input, capped by the charger); the battery
+// tops up the rest, never more than 16 kW per set. A lower grid input therefore
+// draws the battery harder and empties it sooner. The battery is assumed to be
+// recharged from the grid between sessions.
+const sessionPower = (fd) => {
+  const sets       = fd.bestQty || 0;
+  const hours      = fd.avgChargeHours || 0;
+  const charger    = fd.chargerRatingKw || 0;
+  const gridPerSet = Number.isFinite(fd.gridKwPerSet) ? Math.max(0, fd.gridKwPerSet) : BEST_GRID_KW;
+  const packKwh    = sets * BEST_BATT_KWH;
+  const gridKw     = Math.min(charger, sets * gridPerSet);
+  const batteryKw  = Math.min(sets * BEST_BATT_KW, Math.max(0, charger - gridKw));
+  const batteryHours  = batteryKw > 0 ? packKwh / batteryKw : 0;
+  const boostHours    = Math.min(hours, batteryHours);
+  const gridOnlyHours = Math.max(0, hours - boostHours);
+  const boostKw       = gridKw + batteryKw;
+  const batteryKwhPerSession = batteryKw * boostHours;
+  // Refill from the grid between sessions: limited by the grid input and by the 1C charge rate
+  const rechargeKw    = sets * Math.min(gridPerSet, BEST_BATT_KW);
+  const rechargeHours = batteryKwhPerSession <= 0 ? 0 : (rechargeKw > 0 ? batteryKwhPerSession / rechargeKw : Infinity);
+  const dayHours      = (fd.chargesPerDay || 0) * (hours + rechargeHours);
+  return {
+    sets, gridPerSet, packKwh, gridKw, batteryKw, batteryHours, boostHours, gridOnlyHours, boostKw,
+    energyPerSession: boostKw * boostHours + gridKw * gridOnlyHours,
+    batteryKwhPerSession, rechargeKw, rechargeHours, dayHours,
+    rechargeFits: dayHours <= 24,
+  };
+};
+
+// Rebuild a session for a battery faded to capFactor of nameplate. Battery power
+// stays at the nameplate split (grid first, battery tops up); only the usable kWh
+// shrinks, so the battery phase ends sooner and the grid part is unaffected.
+const sessionAtCapacity = (sp, capFactor, hours) => {
+  const usableKwh     = sp.packKwh * Math.max(0, capFactor);
+  const boostHours    = sp.batteryKw > 0 ? Math.min(hours, usableKwh / sp.batteryKw) : 0;
+  const gridOnlyHours = Math.max(0, hours - boostHours);
+  return {
+    boostHours, gridOnlyHours,
+    energyPerSession: sp.boostKw * boostHours + sp.gridKw * gridOnlyHours,
+    batteryKwhPerSession: sp.batteryKw * boostHours,
+  };
+};
+
 // ─── CURRENCY CONFIG ─────────────────────────────────────────────────────
 const CURRENCIES = [
   { code: 'USD', symbol: '$',  label: 'USD — US Dollar' },
@@ -230,7 +284,7 @@ function ROICalculatorView({ setToast }) {
   const DEFAULT_FORM = {
     location: '', gridPrice: 0.12, chargingFee: 0.45, avgChargeHours: 1,
     chargesPerDay: 5, otherRevenueDaily: 0, otherCostDaily: 0, currency: 'USD',
-    bestQty: 1, bestCost: 8000, lifecycle: 8000, pcsKw: 6, pcsCost: 2000,
+    bestQty: 1, gridKwPerSet: 12, bestCost: 8000, lifecycle: 8000, pcsKw: 6, pcsCost: 2000,
     evChargerCost: 1500, pvKw: 0, pvCost: 0, pvEfficiency: 85,
     standRequired: true, standCost: 1000, laborCost: 2000,
     sunHours: 3.5, chargerRatingKw: 11,
@@ -496,6 +550,24 @@ function ROICalculatorView({ setToast }) {
         <Card className="p-5 border-t-4 border-t-rose-600">
           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Battery className="w-5 h-5 text-rose-700" /> B.E.S.T. & PCS</h3>
           <InputField label="B.E.S.T. Quantity (Sets)" value={formData.bestQty} onChange={e => hi('bestQty', parseFloat(e.target.value))} type="number" note="1 Set = 4 Tiles (approx 16kWh)" />
+          <InputField label="Grid Input per Set" value={formData.gridKwPerSet ?? BEST_GRID_KW} onChange={e => hi('gridKwPerSet', parseFloat(e.target.value))} type="number" suffix="kW" min="0" note="Standard 12 kW. Lower it where the site's grid supply is limited: less grid draw, but the battery empties sooner." />
+          {(() => {
+            const sp = sessionPower(formData);
+            if (!sp.sets) return null;
+            return (
+              <div className={`mb-4 p-3 rounded-lg border text-xs ${sp.rechargeFits ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-amber-50 border-amber-300 text-amber-800'}`}>
+                <p className="font-semibold text-slate-700 mb-1">Output per session (charger max {formData.chargerRatingKw || 0} kW)</p>
+                <p>Grid {sp.gridKw.toFixed(1)} kW + battery {sp.batteryKw.toFixed(1)} kW = <strong>{sp.boostKw.toFixed(1)} kW</strong></p>
+                {sp.batteryKw > 0
+                  ? <p>{sp.packKwh} kWh battery lasts <strong>{sp.batteryHours.toFixed(1)} h</strong>, then {sp.gridKw.toFixed(1)} kW grid only</p>
+                  : <p>Battery not used: the grid alone meets the charger limit</p>}
+                <p>{+sp.boostHours.toFixed(2)} h at {sp.boostKw.toFixed(1)} kW{sp.gridOnlyHours > 0 ? ` + ${+sp.gridOnlyHours.toFixed(2)} h at ${sp.gridKw.toFixed(1)} kW` : ''} = <strong>{sp.energyPerSession.toFixed(1)} kWh</strong> per {formData.avgChargeHours || 0} h session</p>
+                {!sp.rechargeFits && (
+                  <p className="mt-1 font-semibold">⚠ Refilling {sp.batteryKwhPerSession.toFixed(1)} kWh at {sp.rechargeKw.toFixed(1)} kW (grid, max 1C) takes {Number.isFinite(sp.rechargeHours) ? sp.rechargeHours.toFixed(1) : '∞'} h per session; {formData.chargesPerDay} sessions/day need {Number.isFinite(sp.dayHours) ? sp.dayHours.toFixed(1) : '∞'} h, more than 24 h. The battery cannot fully recharge, so results are optimistic.</p>
+                )}
+              </div>
+            );
+          })()}
           <InputField label="B.E.S.T. Lifecycle" value={formData.lifecycle} onChange={e => hi('lifecycle', parseFloat(e.target.value))} type="number" suffix="Cycles" note="Default: 8000 cycles @ 1C" />
 
           {/* Degradation Toggle */}
@@ -503,7 +575,7 @@ function ROICalculatorView({ setToast }) {
             <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <p className="text-sm font-bold text-slate-800">Consider Battery Degradation</p>
-                <p className="text-xs text-slate-500 mt-0.5">Revenue declines year-by-year as capacity fades</p>
+                <p className="text-xs text-slate-500 mt-0.5">Battery kWh fades year-by-year; only the battery part of each session shrinks, grid power is unaffected</p>
               </div>
               <button onClick={() => hi('degradationEnabled', !formData.degradationEnabled)}
                 className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${formData.degradationEnabled ? 'bg-amber-500' : 'bg-slate-300'}`}>
@@ -536,7 +608,7 @@ function ROICalculatorView({ setToast }) {
 
           <InputField label="Cost per Set" value={formData.bestCost} onChange={e => hi('bestCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="PCS Power" value={formData.pcsKw} onChange={e => hi('pcsKw', parseFloat(e.target.value))} type="number" suffix="kW" />
+            <InputField label="PCS Power" value={formData.pcsKw} onChange={e => hi('pcsKw', parseFloat(e.target.value))} type="number" suffix="kW" note="Reference only; output = 16 kW battery + grid input per set" />
             <InputField label="PCS Cost" value={formData.pcsCost} onChange={e => hi('pcsCost', parseFloat(e.target.value))} type="number" suffix={formData.currency} />
           </div>
         </Card>
@@ -636,33 +708,30 @@ function ROICalculatorView({ setToast }) {
   const renderStep4 = () => {
     const { currency } = formData;
     const currSymbol = getCurrencySymbol(currency);
-    const outputKw = (formData.bestQty * 28) + formData.pcsKw;
-    const effectivePower = Math.min(outputKw, formData.chargerRatingKw);
-    // Base energy/session and revenue at 100% capacity (Year 1 start)
-    const energyPerSession = formData.avgChargeHours * effectivePower;
-    const dailyEnergySold  = formData.chargesPerDay * energyPerSession;
+    // ── Session power model (see sessionPower) ────────────────────────────
+    // Nameplate (new battery) split; each year's actual session is rebuilt below
+    // from the faded battery capacity.
+    const sp = sessionPower(formData);
+    const { packKwh, gridKw, boostKw, batteryKwhPerSession } = sp;
 
-    const dailyEvRev    = dailyEnergySold * formData.chargingFee;
-    const dailyOtherRev = formData.otherRevenueDaily || 0;
-    const baseAnnualRevenue = (dailyEvRev + dailyOtherRev) * 365;
-
-    const dailyPvGen    = formData.pvKw * formData.sunHours * (formData.pvEfficiency / 100);
-    const dailyGridDraw = Math.max(0, dailyEnergySold - dailyPvGen);
-    const dailyGridCost = dailyGridDraw * formData.gridPrice;
+    const dailyOtherRev  = formData.otherRevenueDaily || 0;
+    const dailyPvGen     = formData.pvKw * formData.sunHours * (formData.pvEfficiency / 100);
     const dailyOtherCost = formData.otherCostDaily || 0;
-    const baseAnnualOpEx = (dailyGridCost + dailyOtherCost) * 365;
 
     // ── Degradation model ─────────────────────────────────────────────────
     // Capacity factor at the midpoint of year N (after any reset from replacement):
     //   factor = 1 - (cyclesUsedAtMidYear / lifecycle) × drop
     //   where drop = 1 - eolRetention/100
-    // Revenue and grid OpEx both scale with capacity factor (less energy = less revenue AND less grid draw)
-    // Other fixed costs (otherCostDaily) do NOT scale with degradation
+    // Fading shrinks only the BATTERY's usable kWh, so the battery phase of each
+    // session ends sooner; the grid part is unaffected (see sessionAtCapacity).
+    // Revenue and grid OpEx both follow the resulting kWh sold. Other revenue and
+    // other fixed costs do not degrade.
     const degradationOn   = formData.degradationEnabled;
     const eolFraction     = formData.eolRetention / 100;   // e.g. 0.70
     const drop            = 1 - eolFraction;               // e.g. 0.30
-    const totalCapKwh     = formData.bestQty * 16;
-    const cyclesPerDay    = totalCapKwh > 0 ? (formData.chargesPerDay * Math.min(energyPerSession, totalCapKwh)) / totalCapKwh : 0;
+    const totalCapKwh     = packKwh;
+    // Battery wear counts only the energy the battery itself supplies, not the grid part
+    const cyclesPerDay    = totalCapKwh > 0 ? (formData.chargesPerDay * batteryKwhPerSession) / totalCapKwh : 0;
     const cyclesPerYear   = cyclesPerDay * 365;
     const replacementInterval = Math.ceil((cyclesPerDay > 0 ? formData.lifecycle / cyclesPerDay : 999999) / 365);
     const replacementCost = (formData.bestQty * formData.bestCost) * 0.70;
@@ -704,10 +773,13 @@ function ROICalculatorView({ setToast }) {
       // Inflation compounds from Year 1 (yearsElapsed = i - 1)
       const feeInflMult  = Math.pow(1 + feeInflRate,  i - 1);
       const gridInflMult = Math.pow(1 + gridInflRate, i - 1);
-      // Revenue = base × capacity × fee inflation
-      const yearRevenue     = baseAnnualRevenue * capFactor * feeInflMult;
-      // Grid OpEx scales with capacity AND grid-price inflation; fixed other costs unchanged
-      const scaledGridOpEx  = (dailyGridCost * 365) * capFactor * gridInflMult;
+      // This year's session with the faded battery (grid part unchanged)
+      const sess            = sessionAtCapacity(sp, capFactor, formData.avgChargeHours || 0);
+      const dailyEnergy     = formData.chargesPerDay * sess.energyPerSession;
+      // Revenue = kWh sold × fee (+ other revenue) × fee inflation
+      const yearRevenue     = (dailyEnergy * formData.chargingFee + dailyOtherRev) * 365 * feeInflMult;
+      // Grid OpEx = kWh bought (energy sold less PV) × grid price × grid inflation; other fixed costs unchanged
+      const scaledGridOpEx  = Math.max(0, dailyEnergy - dailyPvGen) * formData.gridPrice * 365 * gridInflMult;
       const yearOpEx        = scaledGridOpEx + (dailyOtherCost * 365);
       const isReplacement   = (i % replacementInterval === 0);
       const hideReplacement = isReplacement && i >= 8;
@@ -724,8 +796,11 @@ function ROICalculatorView({ setToast }) {
       cashFlows.push(flow);
       cumulative += flow;
       tableData.push({ year: i, revenue: yearRevenue, expense: yearOpEx + (isReplacement && !hideReplacement ? replacementCost : 0),
-        salvage, net: flow, cumulative, isReplacement: isReplacement && !hideReplacement, capFactor });
+        salvage, net: flow, cumulative, isReplacement: isReplacement && !hideReplacement, capFactor,
+        energyPerSession: sess.energyPerSession, boostHours: sess.boostHours, gridOnlyHours: sess.gridOnlyHours,
+        dailyEnergy, gridOpEx: scaledGridOpEx, feeInflMult, gridInflMult });
     }
+    const y1 = tableData[0];   // headline KPIs and the formula card use Year 1
 
     // For KPI cards use Year-1 values (full capacity) as the "headline" figure
     const annualRevenue = tableData[0].revenue;
@@ -780,13 +855,30 @@ function ROICalculatorView({ setToast }) {
             </p>
             <p className="text-2xl font-bold text-rose-700 mb-3">{currSymbol} {annualProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
-              <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
+              <p className="text-slate-500 font-sans font-semibold mb-2">Formula (Year 1):</p>
               <p className="flex justify-between text-slate-600"><span>Sessions/day</span><span>{formData.chargesPerDay}</span></p>
-              <p className="flex justify-between text-slate-600"><span>× hrs/session</span><span>{formData.avgChargeHours}</span></p>
-              <p className="flex justify-between text-slate-600"><span>× power (kW)</span><span>{effectivePower.toFixed(1)}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× kWh/session</span><span>{y1.energyPerSession.toFixed(1)}</span></p>
+              {y1.boostHours > 0 && (
+                <p className="flex justify-between text-slate-400 pl-2"><span>{boostKw.toFixed(1)} kW × {+y1.boostHours.toFixed(2)} h</span><span>{(boostKw * y1.boostHours).toFixed(1)}</span></p>
+              )}
+              {y1.gridOnlyHours > 0 && (
+                <p className="flex justify-between text-slate-400 pl-2"><span>+ {gridKw.toFixed(1)} kW × {+y1.gridOnlyHours.toFixed(2)} h grid</span><span>{(gridKw * y1.gridOnlyHours).toFixed(1)}</span></p>
+              )}
+              <p className="text-slate-400 pl-2">grid {gridKw.toFixed(1)} + battery {sp.batteryKw.toFixed(1)} kW · grid input {sp.gridPerSet} kW/set{degradationOn ? ` · battery at ${(y1.capFactor * 100).toFixed(1)}%` : ''}</p>
+              {!sp.rechargeFits && (
+                <p className="text-amber-700 font-sans pl-2">⚠ battery cannot fully recharge between sessions; optimistic</p>
+              )}
               <p className="flex justify-between text-slate-600"><span>× fee/kWh</span><span>{formData.chargingFee}</span></p>
-              <p className="flex justify-between text-slate-600"><span>× 365 days</span><span>= {currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
-              <p className="flex justify-between text-red-500"><span>− Annual OpEx</span><span>{Math.round(annualOpEx).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>× 365 days</span><span>{Math.round(y1.dailyEnergy * formData.chargingFee * 365).toLocaleString()}</span></p>
+              {dailyOtherRev > 0 && (
+                <p className="flex justify-between text-slate-600"><span>+ other {dailyOtherRev}/day × 365</span><span>{Math.round(dailyOtherRev * 365).toLocaleString()}</span></p>
+              )}
+              <p className="flex justify-between text-slate-600"><span>= Revenue</span><span>{currency} {Math.round(annualRevenue).toLocaleString()}</span></p>
+              <p className="flex justify-between text-red-500 mt-1"><span>− Annual OpEx</span><span>{Math.round(annualOpEx).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-400 pl-2"><span>({y1.dailyEnergy.toFixed(1)}{dailyPvGen > 0 ? ` − ${dailyPvGen.toFixed(1)} PV` : ''} kWh) × {formData.gridPrice} × 365</span><span>{Math.round(y1.gridOpEx).toLocaleString()}</span></p>
+              {dailyOtherCost > 0 && (
+                <p className="flex justify-between text-slate-400 pl-2"><span>+ other {dailyOtherCost}/day × 365</span><span>{Math.round(dailyOtherCost * 365).toLocaleString()}</span></p>
+              )}
               <p className="flex justify-between text-rose-800 font-bold border-t border-slate-100 pt-1 mt-1"><span>= Net/yr</span><span>{Math.round(annualProfit).toLocaleString()}</span></p>
             </div>
           </Card>
@@ -796,11 +888,18 @@ function ROICalculatorView({ setToast }) {
             <p className="text-slate-500 text-xs mb-1 uppercase tracking-wide">Project IRR (10y)</p>
             <p className={`text-2xl font-bold mb-3 ${irrValue > 0 ? 'text-indigo-600' : 'text-red-500'}`}>{irrValue ? `${irrValue.toFixed(1)}%` : 'N/A'}</p>
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
-              <p className="text-slate-500 font-sans font-semibold mb-2">Cash flow inputs:</p>
-              <p className="flex justify-between text-slate-600"><span>Year 0 (invest)</span><span className="text-red-500">−{Math.round(totalCapex).toLocaleString()}</span></p>
-              <p className="flex justify-between text-slate-600"><span>Avg Net / Yr (10y)</span><span className="text-rose-700">+{Math.round(avgAnnualProfit).toLocaleString()}</span></p>
-              {replacementInterval <= 10 && (
-                <p className="flex justify-between text-slate-600"><span>Yr {replacementInterval} repl.</span><span className="text-amber-600">−{Math.round(replacementCost).toLocaleString()}</span></p>
+              <p className="text-slate-500 font-sans font-semibold mb-1">Formula:</p>
+              <p className="text-slate-500 mb-2">Σ NetFlow<sub>t</sub> ÷ (1+IRR)<sup>t</sup> = 0, t = 0…10</p>
+              <p className="flex justify-between text-slate-600"><span>t = 0 (CAPEX)</span><span className="text-red-500">−{Math.round(totalCapex).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>t = 1…10</span><span>Net Flow in table</span></p>
+              {tableData.filter(r => r.isReplacement).map(r => (
+                <p key={r.year} className="flex justify-between text-slate-600 pl-2"><span>incl. yr {r.year} battery repl.</span><span className="text-amber-600">−{Math.round(replacementCost).toLocaleString()}</span></p>
+              ))}
+              {tableData.filter(r => r.salvage > 0).map(r => (
+                <p key={`s${r.year}`} className="flex justify-between text-slate-600 pl-2"><span>incl. yr {r.year} salvage</span><span className="text-green-600">+{Math.round(r.salvage).toLocaleString()}</span></p>
+              ))}
+              {potentialReplacementYears.length > 0 && (
+                <p className="flex justify-between text-slate-400 pl-2"><span>yr {potentialReplacementYears.join(', ')} repl. (potential)</span><span>not counted</span></p>
               )}
               <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1 mt-1"><span>Battery life</span><span>{formData.lifecycle.toLocaleString()} cyc</span></p>
               <p className="flex justify-between text-indigo-700 font-bold"><span>= IRR</span><span>{irrValue ? `${irrValue.toFixed(2)}%` : 'N/A'}</span></p>
@@ -815,9 +914,11 @@ function ROICalculatorView({ setToast }) {
             <div className="border-t border-slate-100 pt-3 space-y-1 text-xs font-mono">
               <p className="text-slate-500 font-sans font-semibold mb-2">Formula:</p>
               <p className="flex justify-between text-slate-600"><span>CAPEX</span><span>{Math.round(totalCapex).toLocaleString()}</span></p>
-              <p className="flex justify-between text-slate-600"><span>÷ Net/yr</span><span>{Math.round(annualProfit).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-600"><span>÷ Avg Net/yr (10y)</span><span>{Math.round(avgAnnualProfit).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-400 pl-2"><span>= Σ Net Flow yr 1–10 ÷ 10</span><span>{Math.round(avgAnnualProfit * 10).toLocaleString()} ÷ 10</span></p>
               <p className="flex justify-between text-slate-700 font-bold border-t border-slate-100 pt-1 mt-1"><span>= Payback</span><span>{roiYears > 0 ? `${roiYears.toFixed(1)} yrs` : 'N/A'}</span></p>
               <p className="flex justify-between text-slate-600 mt-1"><span>10y Cumul.</span><span>{Math.round(cumulative).toLocaleString()}</span></p>
+              <p className="flex justify-between text-slate-400 pl-2"><span>= −CAPEX + Σ Net Flow</span><span>{Math.round(-totalCapex).toLocaleString()} + {Math.round(avgAnnualProfit * 10).toLocaleString()}</span></p>
               <p className="flex justify-between text-slate-600"><span>÷ CAPEX</span><span>{Math.round(totalCapex).toLocaleString()}</span></p>
               <p className="flex justify-between text-rose-800 font-bold border-t border-slate-100 pt-1"><span>= 10y Yield</span><span>{roiPercent.toFixed(1)}%</span></p>
             </div>
@@ -862,8 +963,10 @@ function ROICalculatorView({ setToast }) {
                     const partnerAvgAnnualNet = income10y / 10;
                     const payback = invest > 0 ? (partnerAvgAnnualNet > 0 ? invest / partnerAvgAnnualNet : 999) : 0;
                     const roi = invest > 0 ? ((income10y - invest) / invest) * 100 : 999;
+                    const n0 = (v) => Math.round(v).toLocaleString();
                     return (
-                      <tr key={party.id}>
+                      <React.Fragment key={party.id}>
+                      <tr>
                         <td className="px-4 py-3 font-medium">{party.name}</td>
                         <td className="px-4 py-3 text-slate-500">{party.capexShare}%</td>
                         <td className="px-4 py-3 font-bold">{currency} {Math.round(invest).toLocaleString()}</td>
@@ -872,6 +975,17 @@ function ROICalculatorView({ setToast }) {
                         <td className="px-4 py-3 font-bold">{invest === 0 ? 'Immediate' : `${roi.toFixed(1)}%`}</td>
                         <td className="px-4 py-3">{invest === 0 ? 'Immediate' : payback > 50 ? '> 50 yrs' : `${payback.toFixed(1)} yrs`}</td>
                       </tr>
+                      <tr className="bg-slate-50">
+                        <td colSpan={7} className="px-4 pb-3 pt-1 text-[11px] font-mono text-slate-500 space-y-0.5">
+                          <p>Investment = CAPEX {n0(totalCapex)} × {party.capexShare}% = {n0(invest)}</p>
+                          <p>Monthly net = Yr-1 net {n0(annualProfit)} ÷ 12 × {party.profitShare}%{party.monthlyCost ? ` − ${n0(party.monthlyCost)}` : ''} = {n0(netMonthly)}</p>
+                          <p>10y income = Σ operating profit yr 1–10 {n0(totalOperatingProfit10y)} × {party.profitShare}%{partnerFixedOpex10y ? ` − ${n0(party.monthlyCost)} × 120` : ''}{replShare ? ` − replacements ${n0(totalReplacement10y)} × ${party.capexShare}%` : ''} = {n0(income10y)}</p>
+                          {invest > 0 && (
+                            <p>10y ROI = ({n0(income10y)} − {n0(invest)}) ÷ {n0(invest)} = {roi.toFixed(1)}% · Payback = {n0(invest)} ÷ ({n0(income10y)} ÷ 10) = {payback > 50 ? '> 50' : payback.toFixed(1)} yrs</p>
+                          )}
+                        </td>
+                      </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -903,6 +1017,7 @@ function ROICalculatorView({ setToast }) {
                     <tr>
                       <th className="px-4 py-3">Year</th>
                       {formData.degradationEnabled && <th className="px-4 py-3 text-amber-600">Batt. Cap.</th>}
+                      <th className="px-4 py-3">kWh/session</th>
                       <th className="px-4 py-3">Revenue</th>
                       <th className="px-4 py-3">OpEx</th>
                       <th className="px-4 py-3">Net Flow</th>
@@ -921,6 +1036,7 @@ function ROICalculatorView({ setToast }) {
                             {row.isReplacement && <div className="text-[10px] text-blue-600 mt-0.5">↺ reset</div>}
                           </td>
                         )}
+                        <td className="px-4 py-3 text-slate-600 font-mono">{row.energyPerSession.toFixed(1)}</td>
                         <td className="px-4 py-3 text-rose-700">+{Math.round(row.revenue).toLocaleString()}</td>
                         <td className="px-4 py-3 text-red-500">
                           -{Math.round(row.expense).toLocaleString()}
@@ -933,6 +1049,20 @@ function ROICalculatorView({ setToast }) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              {/* Column formulas, with this scenario's numbers, so each row can be checked by hand */}
+              <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 text-[11px] font-mono text-slate-500 space-y-1">
+                <p className="font-sans font-semibold text-slate-600 mb-1">How each column is calculated (year N):</p>
+                <p><b>kWh/session</b> = {boostKw.toFixed(1)} kW (grid {gridKw.toFixed(1)} + battery {sp.batteryKw.toFixed(1)}) × battery hours + {gridKw.toFixed(1)} kW × remaining hours;
+                  {' '}battery hours = min({formData.avgChargeHours} h, {packKwh} kWh{degradationOn ? ' × Batt. Cap.' : ''} ÷ {sp.batteryKw.toFixed(1)} kW)</p>
+                {degradationOn && (
+                  <p><b>Batt. Cap.</b> = 1 − cycles at mid-year ÷ {formData.lifecycle.toLocaleString()} × {(drop * 100).toFixed(0)}%;
+                    {' '}cycles/day = {formData.chargesPerDay} × {batteryKwhPerSession.toFixed(1)} kWh ÷ {packKwh} kWh = {cyclesPerDay.toFixed(2)} (min. {(eolFraction * 100).toFixed(0)}% unless a yr 8+ replacement is skipped)</p>
+                )}
+                <p><b>Revenue</b> = {formData.chargesPerDay} × kWh/session × {formData.chargingFee} × 365{dailyOtherRev > 0 ? ` + ${dailyOtherRev} × 365` : ''}{feeInflRate ? ` × (1 + ${formData.chargingFeeInflationPct}%)^(N−1)` : ''}</p>
+                <p><b>OpEx</b> = ({formData.chargesPerDay} × kWh/session{dailyPvGen > 0 ? ` − ${dailyPvGen.toFixed(1)} PV` : ''}) × {formData.gridPrice} × 365{gridInflRate ? ` × (1 + ${formData.gridPriceInflationPct}%)^(N−1)` : ''}{dailyOtherCost > 0 ? ` + ${dailyOtherCost} × 365` : ''}{replacementInterval <= 10 ? ` + battery replacement ${Math.round(replacementCost).toLocaleString()} (= ${formData.bestQty} × ${formData.bestCost.toLocaleString()} × 70%) every ${replacementInterval} yrs, before yr 8` : ''}</p>
+                <p><b>Net Flow</b> = Revenue − OpEx{tableData.some(r => r.salvage > 0) ? ' + salvage (90% of replacement, yr 10)' : ''} · <b>Cumulative</b> = −{Math.round(totalCapex).toLocaleString()} + Σ Net Flow</p>
+                <p>Year 1 check: {formData.chargesPerDay} × {y1.energyPerSession.toFixed(1)} × {formData.chargingFee} × 365{dailyOtherRev > 0 ? ' + other' : ''} = {Math.round(y1.revenue).toLocaleString()}</p>
               </div>
             </Card>
             {potentialReplacementCost > 0 && (
@@ -953,6 +1083,8 @@ function ROICalculatorView({ setToast }) {
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">Revenue</p>
                   <p className="flex justify-between"><span>Fee:</span><span>{currency} {formData.chargingFee} / kWh</span></p>
                   <p className="flex justify-between"><span>Sessions:</span><span>{formData.chargesPerDay}/day</span></p>
+                  <p className="flex justify-between"><span>kWh/session (yr 1):</span><span>{y1.energyPerSession.toFixed(1)}</span></p>
+                  <p className="text-[11px] font-mono text-slate-400">{formData.chargesPerDay} × {y1.energyPerSession.toFixed(1)} × {formData.chargingFee} × 365{dailyOtherRev > 0 ? ` + ${dailyOtherRev} × 365` : ''}</p>
                   <p className="flex justify-between font-medium text-rose-800 mt-1">
                     <span>Annual{(formData.chargingFeeInflationEnabled) && <span className="text-[10px] text-amber-700 ml-1">(Yr 1)</span>}:</span>
                     <span>{currency} {Math.round(annualRevenue).toLocaleString()}</span>
@@ -962,6 +1094,7 @@ function ROICalculatorView({ setToast }) {
                   <p className="font-semibold text-slate-800 border-b border-slate-100 pb-1 mb-2">OpEx</p>
                   <p className="flex justify-between"><span>Grid:</span><span>{currency} {formData.gridPrice} / kWh</span></p>
                   <p className="flex justify-between"><span>PV Gen:</span><span>{dailyPvGen.toFixed(1)} kWh/day</span></p>
+                  <p className="text-[11px] font-mono text-slate-400">({y1.dailyEnergy.toFixed(1)} − {dailyPvGen.toFixed(1)}) × {formData.gridPrice} × 365{dailyOtherCost > 0 ? ` + ${dailyOtherCost} × 365` : ''}</p>
                   <p className="flex justify-between font-medium text-red-700 mt-1">
                     <span>Annual{(formData.gridPriceInflationEnabled) && <span className="text-[10px] text-amber-700 ml-1">(Yr 1)</span>}:</span>
                     <span>{currency} {Math.round(annualOpEx).toLocaleString()}</span>
@@ -1041,7 +1174,8 @@ function InteractiveChargingROI() {
   // Super uses full 180 kW rated power — battery cap naturally limits it (e.g. 60 min = min(180,75) = 75 kWh)
   const energyPerSession = {
     ac:    Math.min(7   * dwellH, 75),
-    best:  Math.min(28  * dwellH, 75),
+    // 28 kW (16 battery + 12 grid) for up to 1 h, then 12 kW grid-only once the 16 kWh battery is depleted
+    best:  Math.min(BEST_BATT_KW * Math.min(dwellH, BEST_BATT_KWH / BEST_BATT_KW) + BEST_GRID_KW * dwellH, 75),
     super: Math.min(60  * dwellH, 75),  // capped at 60 kW — standard EV onboard charger limit
   };
 
